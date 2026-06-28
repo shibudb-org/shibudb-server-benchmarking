@@ -14,6 +14,7 @@ from common import (
     ResultWriter,
     create_space,
     make_client,
+    mark_phase,
     run_phase,
     summarize,
 )
@@ -29,6 +30,7 @@ def run(args, writer: ResultWriter):
     for wal in wal_modes:
         space = f"{args.space_prefix}_kv_wal{int(wal)}_{int(time.time())}"
         print(f"\n=== KEY-VALUE wal={wal} ===", flush=True)
+        mark_phase(f"kv wal{int(wal)}")
         create_space(args, space, "key-value", enable_wal=wal)
 
         # PUT uses ingest concurrency (write load); GET/DELETE use the query sweep.

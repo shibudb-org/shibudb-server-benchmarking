@@ -8,6 +8,8 @@ ground-truth).
 It measures the database the way real clients use it and reports the three
 numbers that make a database benchmark credible — **recall**, **throughput
 (ops/sec)**, and **latency percentiles (p50/p95/p99)** — never throughput alone.
+It can also sample the **server's CPU and memory** throughout the run and chart
+them over time (see *Server resource monitoring* below).
 
 ## Coverage
 
@@ -83,7 +85,41 @@ python plot.py --csv results/sift1m_meta_kv.csv --out-dir results/charts/meta_kv
   concurrency, scenario, selectivity, throughput_ops_sec, recall_at_k, p50/p95/p99_ms, ...`).
 - `results/<name>.json` — same results plus a captured environment block (git
   commit, SDK/Python versions, host, CPU, OS, all args) for reproducibility.
-- `results/charts/*.png` — per-suite recall/throughput/latency/ingest charts.
+- `results/charts/*.png` — per-suite recall/throughput/latency/ingest charts,
+  plus `server_cpu_over_time.png` / `server_mem_over_time.png` when resource
+  monitoring was active.
+- `results/<name>.resources.csv` / `.resources.json` — server CPU% and resident
+  memory sampled over time (with per-phase markers and peak/mean summary), when
+  monitoring was active.
+
+## Server resource monitoring (CPU / memory)
+
+When the benchmark client runs **on the same host as the server**, it samples the
+server process's CPU% and resident memory (RSS) on a background thread for the
+whole run, annotates each suite/index/WAL phase, and `plot.py` renders CPU and
+memory time-series charts.
+
+It is on by default (auto-detecting the process named `shibudb`). Controls:
+
+```bash
+# disable it entirely
+python benchmark.py --suites all --no-monitor ...
+
+# monitor a specific PID (e.g. server in a container/another user) at 1s cadence
+python benchmark.py --suites all --server-pid 12345 --monitor-interval 1.0 ...
+
+# change the auto-detect name match
+python benchmark.py --suites all --server-name shibudb-server ...
+```
+
+Notes:
+
+- Requires `psutil` (in `requirements.txt`). If it's missing or the server
+  process isn't on this host, the run continues and prints a notice — only the
+  CPU/memory artifacts are skipped.
+- For the recommended **client-on-a-separate-machine** setup, run a sampler on
+  the server host instead (the client can't see a remote process). The
+  `process CPU%` is per psutil and can exceed 100% on multicore.
 
 ## Methodology notes / caveats (read before publishing)
 

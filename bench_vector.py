@@ -28,6 +28,7 @@ from common import (
     compute_ground_truth,
     create_space,
     make_client,
+    mark_phase,
     parse_search_ids,
     recall_at_k,
     run_phase,
@@ -84,6 +85,7 @@ def run(args, base, queries, sift_gt, writer: ResultWriter):
         for wal in wal_modes:
             space = f"{args.space_prefix}_vec_{index_type.replace(',', '_')}_wal{int(wal)}_{int(time.time())}"
             print(f"\n=== VECTOR index={index_type} wal={wal} ===", flush=True)
+            mark_phase(f"vec {index_type} wal{int(wal)}")
             create_space(args, space, "vector", dimension=args.dimension,
                          index_type=index_type, metric=args.metric, enable_wal=wal)
 
