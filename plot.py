@@ -12,8 +12,6 @@ Produces (only for suites present in the CSV):
     metadata_recall_vs_qps.png, metadata_qps_vs_concurrency.png
   key_value:
     kv_throughput.png, kv_latency.png
-  server resources (if a <csv>.resources.csv exists):
-    server_cpu_over_time.png, server_mem_over_time.png
 
 Usage:
   python plot.py --csv results/run.csv --out-dir results/charts
@@ -23,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import os
 from collections import defaultdict
 
@@ -196,72 +193,10 @@ def plot_kv(rows, out_dir):
     _save(fig, out_dir, "kv_latency.png")
 
 
-# --------------------------------------------------------------------------- #
-# Server resource usage (CPU / memory over time)
-# --------------------------------------------------------------------------- #
-def _phase_marks(res_csv):
-    """Load phase markers (t, label) from the sibling .resources.json, if any."""
-    jpath = os.path.splitext(res_csv)[0] + ".json"
-    if not os.path.exists(jpath):
-        return []
-    try:
-        with open(jpath) as f:
-            return [(float(m["t"]), m["label"]) for m in json.load(f).get("marks", [])]
-    except (ValueError, KeyError, OSError):
-        return []
-
-
-def _draw_marks(ax, marks):
-    for t, label in marks:
-        ax.axvline(t, color="gray", ls="--", lw=0.7, alpha=0.6)
-        ax.text(t, ax.get_ylim()[1], label, rotation=90, va="top", ha="right",
-                fontsize=6, color="gray")
-
-
-def plot_resources(res_csv, out_dir):
-    if not os.path.exists(res_csv):
-        return
-    rows = load_rows(res_csv)
-    if not rows:
-        return
-    t = [fnum(r, "t_seconds") for r in rows]
-    proc_cpu = [fnum(r, "proc_cpu_percent") for r in rows]
-    proc_rss = [fnum(r, "proc_rss_mb") for r in rows]
-    sys_cpu = [fnum(r, "sys_cpu_percent") for r in rows]
-    sys_mem = [fnum(r, "sys_mem_used_mb") for r in rows]
-    marks = _phase_marks(res_csv)
-
-    # CPU over time
-    fig, ax = plt.subplots(figsize=(11, 6))
-    ax.plot(t, proc_cpu, color="tab:red", lw=1.2, label="server process")
-    ax.plot(t, sys_cpu, color="tab:orange", lw=0.8, alpha=0.6, label="whole host")
-    ax.set_xlabel("Elapsed time (s)")
-    ax.set_ylabel("CPU (%)  — process can exceed 100% on multicore")
-    ax.set_title("Server CPU usage over the benchmark run")
-    ax.grid(True, alpha=0.3)
-    _draw_marks(ax, marks)
-    ax.legend(fontsize=8, loc="upper left")
-    _save(fig, out_dir, "server_cpu_over_time.png")
-
-    # Memory over time
-    fig, ax = plt.subplots(figsize=(11, 6))
-    ax.plot(t, proc_rss, color="tab:blue", lw=1.2, label="server RSS")
-    ax.plot(t, sys_mem, color="tab:cyan", lw=0.8, alpha=0.6, label="host used")
-    ax.set_xlabel("Elapsed time (s)")
-    ax.set_ylabel("Memory (MB)")
-    ax.set_title("Server memory usage over the benchmark run")
-    ax.grid(True, alpha=0.3)
-    _draw_marks(ax, marks)
-    ax.legend(fontsize=8, loc="upper left")
-    _save(fig, out_dir, "server_mem_over_time.png")
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default="results/run.csv")
     ap.add_argument("--out-dir", default="results/charts")
-    ap.add_argument("--resources", default=None,
-                    help="server CPU/memory time-series CSV (defaults to <csv>.resources.csv)")
     args = ap.parse_args()
 
     rows = load_rows(args.csv)
@@ -272,9 +207,6 @@ def main():
     plot_vector(rows, args.out_dir)
     plot_metadata(rows, args.out_dir)
     plot_kv(rows, args.out_dir)
-
-    res_csv = args.resources or (os.path.splitext(args.csv)[0] + ".resources.csv")
-    plot_resources(res_csv, args.out_dir)
 
 
 if __name__ == "__main__":

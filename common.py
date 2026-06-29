@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 import numpy as np
 
 try:
-    from shibudb_client import ShibuDbClient
+    from shibudb_client import ConnectionConfig, ParallelExecutor, ShibuDbClient
 except ImportError:  # pragma: no cover
     raise SystemExit("shibudb-client is not installed. Run: pip install -r requirements.txt")
 
@@ -49,13 +49,42 @@ def make_client(args, space: str | None = None) -> ShibuDbClient:
 def run_phase(args, space: str, n: int, concurrency: int, task_fn, collect: bool = False):
     """Execute `task_fn(client, i)` for i in [0, n) across `concurrency` workers.
 
-    Each worker owns one authenticated connection (the SDK serializes I/O per
-    connection, so concurrency == number of connections). Per-call latency is
-    timed. `task_fn` should raise on failure. If `collect`, the per-item return
-    value of `task_fn` is stored and returned.
+    Each worker owns one authenticated connection. Per-call latency is timed.
+    `task_fn` should raise on failure. If `collect`, the per-item return value of
+    `task_fn` is stored and returned (index-aligned).
+
+    IMPORTANT: by default workers are separate OS *processes* (not threads).
+    CPython has a Global Interpreter Lock, so a thread-pool client cannot drive a
+    fast server in parallel -- the per-op work (json encode/decode, socket
+    buffering) is serialized on the GIL, which caps total throughput at ~one core
+    and makes it *decline* as you add threads. Processes each have their own GIL,
+    so concurrency on this axis finally reflects the server's real concurrency.
+
+    The process path uses the `fork` start method so each worker inherits the
+    (large, read-only) data captured by `task_fn` via copy-on-write -- nothing is
+    pickled except each worker's small latency/result slice on the way back.
+
+    Set `--client-parallelism thread` (or args.client_parallelism = "thread") to
+    restore the old GIL-bound behavior for comparison.
 
     Returns: (latencies_ms[list], results[list|None], failed[int], wall_seconds).
     """
+    mode = getattr(args, "client_parallelism", "process")
+    if mode == "process":
+        # Real parallelism lives in the client library (ParallelExecutor): one
+        # OS process per worker, each with its own connection + GIL. task_fn has
+        # the exact (client, item) signature it expects; items are the indices
+        # [0, n), and map() preserves order so results/latencies stay aligned.
+        cfg = ConnectionConfig(host=args.host, port=args.port, timeout=args.timeout,
+                               username=args.user, password=args.password)
+        ex = ParallelExecutor(cfg, processes=concurrency, space=space)
+        res = ex.run(task_fn, range(n))
+        return res.latencies_ms, (res.results if collect else None), res.failed, res.wall_seconds
+    return _run_phase_threaded(args, space, n, concurrency, task_fn, collect)
+
+
+def _run_phase_threaded(args, space: str, n: int, concurrency: int, task_fn, collect: bool):
+    """Thread-pool runner (GIL-bound). Kept for A/B comparison only."""
     latencies = [0.0] * n
     results = [None] * n if collect else None
     failed = {"n": 0}
@@ -101,178 +130,6 @@ def summarize(latencies: list[float], wall: float, n: int) -> dict:
         "p95_ms": pct(95),
         "p99_ms": pct(99),
     }
-
-
-# --------------------------------------------------------------------------- #
-# Server resource monitoring (CPU / memory)
-# --------------------------------------------------------------------------- #
-try:
-    import psutil
-except ImportError:  # pragma: no cover
-    psutil = None
-
-
-def find_server_process(pid: int | None = None, name_match: str = "shibudb"):
-    """Locate the ShibuDB server process to monitor.
-
-    Returns a psutil.Process or None. Resource monitoring only works when the
-    server runs on the SAME host as this benchmark client (or when an explicit
-    --server-pid is given). For a remote server, sample on that machine instead.
-    """
-    if psutil is None:
-        return None
-    if pid is not None:
-        try:
-            return psutil.Process(pid)
-        except Exception:
-            return None
-    me = os.getpid()
-    candidates = []
-    for p in psutil.process_iter(["pid", "name", "cmdline"]):
-        try:
-            if p.pid == me:
-                continue
-            hay = (p.info.get("name") or "") + " " + " ".join(p.info.get("cmdline") or [])
-            if name_match.lower() in hay.lower():
-                candidates.append(p)
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
-    if not candidates:
-        return None
-
-    def _rss(p):
-        try:
-            return p.memory_info().rss
-        except Exception:
-            return 0
-
-    # If multiple match (e.g. a launcher + the server), pick the heaviest one.
-    return max(candidates, key=_rss)
-
-
-@dataclass
-class ResourceSample:
-    t: float                  # seconds since monitor start
-    cpu_percent: float        # server-process CPU% (can exceed 100 on multicore)
-    rss_mb: float             # server-process resident memory (MB)
-    sys_cpu_percent: float    # whole-host CPU%
-    sys_mem_used_mb: float    # whole-host memory used (MB)
-
-
-# Module-level handle so suites can annotate phases without plumbing the monitor
-# object through every call. Set by ResourceMonitor.start(), cleared by stop().
-_active_monitor: "ResourceMonitor | None" = None
-
-
-def mark_phase(label: str) -> None:
-    """Record a labeled time marker on the active monitor (no-op if none)."""
-    if _active_monitor is not None:
-        _active_monitor.mark(label)
-
-
-class ResourceMonitor:
-    """Background sampler of a server process's CPU% and RSS over time.
-
-    Samples every `interval` seconds in a daemon thread until stopped, keeping a
-    full time-series plus optional phase markers. Saving writes a `.resources.csv`
-    (time-series) and `.resources.json` (samples + marks + summary).
-    """
-
-    def __init__(self, proc, interval: float = 0.5):
-        self.proc = proc
-        self.interval = interval
-        self.samples: list[ResourceSample] = []
-        self.marks: list[tuple[float, str]] = []
-        self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
-        self._t0: float | None = None
-
-    @property
-    def active(self) -> bool:
-        return self.proc is not None and psutil is not None
-
-    def start(self) -> "ResourceMonitor":
-        global _active_monitor
-        if not self.active:
-            return self
-        _active_monitor = self
-        self._t0 = time.perf_counter()
-        # Prime cpu_percent counters (first call always returns 0.0).
-        try:
-            self.proc.cpu_percent(None)
-        except Exception:
-            pass
-        psutil.cpu_percent(None)
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-        return self
-
-    def mark(self, label: str) -> None:
-        if self.active and self._t0 is not None:
-            self.marks.append((time.perf_counter() - self._t0, label))
-
-    def _loop(self) -> None:
-        while not self._stop.wait(self.interval):
-            t = time.perf_counter() - self._t0
-            try:
-                with self.proc.oneshot():
-                    cpu = self.proc.cpu_percent(None)
-                    rss = self.proc.memory_info().rss / (1024 * 1024)
-            except (psutil.NoSuchProcess, psutil.AccessDenied):
-                break
-            vm = psutil.virtual_memory()
-            self.samples.append(ResourceSample(
-                t=t,
-                cpu_percent=cpu,
-                rss_mb=rss,
-                sys_cpu_percent=psutil.cpu_percent(None),
-                sys_mem_used_mb=(vm.total - vm.available) / (1024 * 1024),
-            ))
-
-    def stop(self) -> "ResourceMonitor":
-        global _active_monitor
-        if self._thread is not None:
-            self._stop.set()
-            self._thread.join(timeout=self.interval * 2 + 1)
-        _active_monitor = None
-        return self
-
-    def summary(self) -> dict:
-        if not self.samples:
-            return {}
-        cpu = [s.cpu_percent for s in self.samples]
-        rss = [s.rss_mb for s in self.samples]
-        return {
-            "samples": len(self.samples),
-            "duration_s": self.samples[-1].t,
-            "interval_s": self.interval,
-            "ncpu": psutil.cpu_count() if psutil else None,
-            "cpu_percent_mean": statistics.fmean(cpu),
-            "cpu_percent_peak": max(cpu),
-            "rss_mb_mean": statistics.fmean(rss),
-            "rss_mb_peak": max(rss),
-        }
-
-    def save(self, path: str) -> None:
-        import csv as _csv
-
-        if not self.samples:
-            return
-        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        with open(path, "w", newline="") as f:
-            w = _csv.writer(f)
-            w.writerow(["t_seconds", "proc_cpu_percent", "proc_rss_mb",
-                        "sys_cpu_percent", "sys_mem_used_mb"])
-            for s in self.samples:
-                w.writerow([f"{s.t:.3f}", f"{s.cpu_percent:.2f}", f"{s.rss_mb:.2f}",
-                            f"{s.sys_cpu_percent:.2f}", f"{s.sys_mem_used_mb:.2f}"])
-        json_path = os.path.splitext(path)[0] + ".json"
-        with open(json_path, "w") as f:
-            json.dump({
-                "summary": self.summary(),
-                "marks": [{"t": t, "label": lbl} for t, lbl in self.marks],
-                "samples": [asdict(s) for s in self.samples],
-            }, f, indent=2)
 
 
 # --------------------------------------------------------------------------- #

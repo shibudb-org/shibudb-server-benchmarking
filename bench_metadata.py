@@ -23,7 +23,6 @@ from common import (
     create_space,
     filter_scenarios,
     make_client,
-    mark_phase,
     metadata_field_spec,
     metadata_for_id,
     parse_search_ids,
@@ -60,7 +59,6 @@ def run(args, base, queries, writer: ResultWriter):
     for wal in wal_modes:
         space = f"{args.space_prefix}_meta_wal{int(wal)}_{int(time.time())}"
         print(f"\n=== METADATA-FILTER (Flat) wal={wal} ===", flush=True)
-        mark_phase(f"meta wal{int(wal)}")
         create_space(args, space, "vector", dimension=args.dimension,
                      index_type="Flat", metric=args.metric, enable_wal=wal,
                      indexed_metadata_fields=metadata_field_spec())
