@@ -29,6 +29,8 @@ Three suites, each swept across **WAL off and WAL on** and multiple concurrency 
 | `bench_metadata.py` | Metadata-filtered search sweep |
 | `bench_kv.py` | Key-value PUT/GET/DELETE sweep |
 | `benchmark.py` | Orchestrator (`--suites`), writes unified CSV + JSON |
+| `run_full.py` | Full-matrix runner: suites × data sizes, fresh DB per test, per-run CSVs, final report + zip |
+| `machine_info.py` | Stdlib-only hardware detector — generates `server-info.json` on any host |
 | `plot.py` | Charts for all suites |
 | `report.py` | Markdown report for GitHub Pages (`docs/BENCHMARKS.md`) |
 | `docs/` | GitHub Pages site (`index.md` + generated `BENCHMARKS.md`) |
@@ -46,49 +48,50 @@ Start a ShibuDB server (from a checkout of the separate `shibudb-server` repo):
 make start-local-server   # localhost:4444, admin/admin
 ```
 
-## ▶ Generate the FULL ShibuDB report — run these commands
+## ▶ Generate the FULL ShibuDB report — run this command
 
 > [!IMPORTANT]
-> This is the canonical, complete benchmark: **all 12 index types × WAL off/on ×
-> concurrency 1–128** on the full 1M-vector SIFT1M base, plus metadata-filtered
-> search and key-value — ending with the publishable report and a downloadable
-> zip bundle. Run it on a dedicated server with the client on a separate machine;
-> it takes many hours. All smaller / customized runs come in the next section.
+> One command runs the whole matrix: **vector + KV suites at 10k → 100k → 500k →
+> 1M**, all 12 index types, WAL off/on, concurrency **1 2 4 8 16**, 5k queries per
+> size. Every test runs on a **fresh DB** (spaces dropped before, deleted after),
+> writes its own `results/{suite}_{size}_{queries}.csv`, and it finishes with the
+> publishable report + downloadable zip. Takes many hours at full scale.
 
 ```bash
-# 0. Record server build + hardware once (edit examples/server-info.example.json for your host)
-SERVER_INFO=examples/server-info.example.json
-SERVER_VER=v1.0.0
-SERVER_SHA=abc123def456
-
-# 1. Vector suite: ALL index types (Flat, HNSW8-64, IVF*, PQ*), WAL off + on
-python benchmark.py --suites vector --both-wal \
-  --num-base 1000000 --num-queries 10000 --k 10 \
-  --concurrency 1 8 32 64 128 --ingest-concurrency 32 \
-  --server-version "$SERVER_VER" --server-commit "$SERVER_SHA" \
-  --server-info-file "$SERVER_INFO" \
-  --out results/sift1m_vector.csv
-
-# 2. Metadata-filtered search + key-value at full scale
-python benchmark.py --suites metadata kv --both-wal \
-  --num-base 1000000 --kv-keys 1000000 \
-  --concurrency 1 8 32 64 128 \
-  --server-version "$SERVER_VER" --server-commit "$SERVER_SHA" \
-  --server-info-file "$SERVER_INFO" \
-  --out results/sift1m_meta_kv.csv
-
-# 3. Charts
-python plot.py --csv results/sift1m_vector.csv --out-dir results/charts/vector
-python plot.py --csv results/sift1m_meta_kv.csv --out-dir results/charts/meta_kv
-
-# 4. Publishable Markdown report (docs/BENCHMARKS.md) + downloadable zip bundle
-python report.py --csv results/sift1m_vector.csv results/sift1m_meta_kv.csv \
-  --charts-dir results/charts --charts-subdir vector meta_kv --zip
+python run_full.py
 ```
 
-The first run downloads SIFT1M (~250 MB) into `~/.shibudb-benchmarks/data`.
-The final step writes `docs/BENCHMARKS.md` (GitHub-ready, with the generated-report
-banner) and `results/benchmark_report_<timestamp>.zip` for download/sharing.
+Everything is configurable (defaults shown):
+
+```bash
+python run_full.py \
+  --suites vector kv \
+  --sizes 10000 100000 500000 1000000 \
+  --num-queries 5000 \
+  --concurrency 1 2 4 8 16 \
+  --both-wal \
+  --out-dir results
+# --suites also accepts metadata; --no-both-wal runs WAL off only
+# also: --index-types, --k, --kv-value-size, --ingest-concurrency,
+#       --host/--port/--user/--password, --server-version/--server-commit/
+#       --server-info-file, --no-report, --dry-run (print commands only)
+```
+
+Vector runs are split **per index type**, each with its own CSV + JSON + log:
+`results/vector_Flat_10000_5000.csv`, `results/vector_HNSW32_10000_5000.csv`,
+`results/vector_IVF256-Flat_10000_5000.csv`, … KV/metadata runs are per size:
+`results/kv_10000_5000.csv`, … Charts go under `results/charts/<name>/`.
+
+**The report is incremental:** after *each* run finishes, `docs/BENCHMARKS.md`
+and `results/benchmark_report.zip` are regenerated to cover everything completed
+so far — no need to wait for the whole matrix to see (or publish) results.
+
+Tips: `--dry-run` first to see the exact commands; the first run downloads
+SIFT1M (~250 MB) into `~/.shibudb-benchmarks/data`. For the server build info,
+pass `--server-version`/`--server-commit` (or `--server-info-file`, auto-generated
+on the server host with `python3 machine_info.py --server-repo ~/src/shibudb-server
+--out server-info.json` — stdlib-only, copy that one file over). Hardware is
+auto-detected when the server runs on localhost.
 
 ## Customized / smaller runs
 
@@ -168,6 +171,9 @@ Add the Pages URL to the repo **About → Website** field so it shows next to th
 - `results/<name>.json` — same results plus a captured environment block (git
   commit, ShibuDB server version/commit, client + server hardware, data scale,
   SDK/Python versions, all args) for reproducibility.
+- `results/<name>.log` — (via `run_full.py`) full console output of the run:
+  the exact command, live ingest/query progress, and the summary. Embedded in the
+  report's "Run logs" section (collapsible) and included in the zip bundle.
 - `results/charts/*.png` — per-suite recall/throughput/latency/ingest charts.
 - `docs/BENCHMARKS.md` — publishable report (data scale, versions, hardware,
   result tables, embedded charts) for GitHub Pages.
@@ -185,6 +191,22 @@ Add the Pages URL to the repo **About → Website** field so it shows next to th
 These are captured into the results JSON at benchmark time and rendered prominently
 in the generated report. You can also pass them to `report.py` when regenerating a
 report from older result files.
+
+**Auto-filling them:**
+
+- **Server on a separate machine** — run the bundled detector on the server host
+  (stdlib-only, just copy the one file over):
+
+```bash
+python3 machine_info.py --server-repo ~/src/shibudb-server --out server-info.json
+# detects hostname, OS, CPU model, cores, RAM, disk; --server-repo also fills
+# version (git describe) and commit (git rev-parse) — then copy the JSON back
+```
+
+- **Server on localhost** — nothing to do: `benchmark.py` detects that the server
+  is co-located with the client and fills its hardware automatically (marked
+  "auto-detected" in the report). You still may pass `--server-version` /
+  `--server-commit` since the build can't be detected over TCP.
 
 ## Methodology notes / caveats (read before publishing)
 

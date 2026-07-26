@@ -57,7 +57,7 @@ def run(args, base, queries, writer: ResultWriter):
     wal_modes = [False, True] if args.both_wal else [args.enable_wal]
 
     for wal in wal_modes:
-        space = f"{args.space_prefix}_meta_wal{int(wal)}_{int(time.time())}"
+        space = f"{args.space_prefix}_meta_wal{int(wal)}"
         print(f"\n=== METADATA-FILTER (Flat) wal={wal} ===", flush=True)
         create_space(args, space, "vector", dimension=args.dimension,
                      index_type="Flat", metric=args.metric, enable_wal=wal,
@@ -80,6 +80,10 @@ def run(args, base, queries, writer: ResultWriter):
         print(f"[ingest+meta] {ing['throughput_ops_sec']:.0f} vec/s ({wall:.1f}s, {failed} failed)", flush=True)
 
         wait_for_searchable(args, space, sample_ids, vector=True)
+        post_wait = getattr(args, "post_ingest_wait", 0)
+        if post_wait > 0:
+            print(f"[settle] waiting {post_wait}s for training/flushing to settle...", flush=True)
+            time.sleep(post_wait)
 
         # --- filtered query sweep ---
         for sc in scenarios:

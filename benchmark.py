@@ -32,7 +32,7 @@ import os
 import bench_kv
 import bench_metadata
 import bench_vector
-from common import ResultWriter, capture_env, load_server_info_file
+from common import ResultWriter, capture_env, load_server_info_file, purge_bench_spaces
 from dataset import load_sift
 
 
@@ -78,6 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
                          "-- throughput will not scale and may decline with concurrency)")
     # Lifecycle
     ap.add_argument("--settle-timeout", type=int, default=600)
+    ap.add_argument("--post-ingest-wait", type=int, default=60,
+                    help="seconds to wait after ingest (once data is retrievable) so index "
+                         "training/flushing settles before queries (default 60; 0 to disable)")
     ap.add_argument("--drop-existing", action="store_true")
     ap.add_argument("--cleanup", action="store_true", help="delete benchmark spaces after each config")
     ap.add_argument("--space-prefix", default="bench")
@@ -98,6 +101,10 @@ def main():
     print(json.dumps(env, indent=2), flush=True)
     writer = ResultWriter(args.out, env)
 
+    # Fresh DB guarantee: remove ALL bench-prefixed spaces (incl. leftovers
+    # from interrupted runs) before starting.
+    purge_bench_spaces(args)
+
     need_dataset = bool({"vector", "metadata"} & suites)
     base = queries = sift_gt = None
     if need_dataset:
@@ -117,6 +124,8 @@ def main():
         print(f"{r.suite:16s} {r.operation:16s} {r.index_type:14s} wal={int(r.wal)} "
               f"c={r.concurrency:<4d}{scenario} {r.throughput_ops_sec:9.1f} ops/s "
               f"p99={r.p99_ms:.2f}ms{recall}", flush=True)
+    purge_bench_spaces(args)  # leave the server clean
+
     print(f"\nWrote {args.out} and {os.path.splitext(args.out)[0] + '.json'}", flush=True)
 
 
