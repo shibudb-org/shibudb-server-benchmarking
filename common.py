@@ -1,0 +1,517 @@
+"""Shared utilities for the ShibuDB benchmark suites.
+
+Provides: client construction, a concurrent phase runner (one dedicated
+connection per worker), latency/throughput summarization, exact ground-truth
+computation (numpy), synthetic metadata generation, a unified result schema,
+and reproducible environment capture.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import platform
+import socket
+import statistics
+import subprocess
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+
+import numpy as np
+
+try:
+    from shibudb_client import ConnectionConfig, ParallelExecutor, ShibuDbClient
+except ImportError:  # pragma: no cover
+    raise SystemExit("shibudb-client is not installed. Run: pip install -r requirements.txt")
+
+# The SDK logs every connect/close at INFO; silence it (noise + per-op overhead).
+logging.getLogger("shibudb_client").setLevel(logging.WARNING)
+
+
+# --------------------------------------------------------------------------- #
+# Connections
+# --------------------------------------------------------------------------- #
+def make_client(args, space: str | None = None) -> ShibuDbClient:
+    client = ShibuDbClient(args.host, args.port, timeout=args.timeout)
+    client.authenticate(args.user, args.password)
+    if space:
+        client.use_space(space)
+    return client
+
+
+# --------------------------------------------------------------------------- #
+# Concurrent phase runner
+# --------------------------------------------------------------------------- #
+def run_phase(args, space: str, n: int, concurrency: int, task_fn, collect: bool = False):
+    """Execute `task_fn(client, i)` for i in [0, n) across `concurrency` workers.
+
+    Each worker owns one authenticated connection. Per-call latency is timed.
+    `task_fn` should raise on failure. If `collect`, the per-item return value of
+    `task_fn` is stored and returned (index-aligned).
+
+    IMPORTANT: by default workers are separate OS *processes* (not threads).
+    CPython has a Global Interpreter Lock, so a thread-pool client cannot drive a
+    fast server in parallel -- the per-op work (json encode/decode, socket
+    buffering) is serialized on the GIL, which caps total throughput at ~one core
+    and makes it *decline* as you add threads. Processes each have their own GIL,
+    so concurrency on this axis finally reflects the server's real concurrency.
+
+    The process path uses the `fork` start method so each worker inherits the
+    (large, read-only) data captured by `task_fn` via copy-on-write -- nothing is
+    pickled except each worker's small latency/result slice on the way back.
+
+    Set `--client-parallelism thread` (or args.client_parallelism = "thread") to
+    restore the old GIL-bound behavior for comparison.
+
+    Returns: (latencies_ms[list], results[list|None], failed[int], wall_seconds).
+    """
+    mode = getattr(args, "client_parallelism", "process")
+    if mode == "process":
+        # Real parallelism lives in the client library (ParallelExecutor): one
+        # OS process per worker, each with its own connection + GIL. task_fn has
+        # the exact (client, item) signature it expects; items are the indices
+        # [0, n), and map() preserves order so results/latencies stay aligned.
+        cfg = ConnectionConfig(host=args.host, port=args.port, timeout=args.timeout,
+                               username=args.user, password=args.password)
+        ex = ParallelExecutor(cfg, processes=concurrency, space=space)
+        res = ex.run(task_fn, range(n))
+        return res.latencies_ms, (res.results if collect else None), res.failed, res.wall_seconds
+    return _run_phase_threaded(args, space, n, concurrency, task_fn, collect)
+
+
+def _run_phase_threaded(args, space: str, n: int, concurrency: int, task_fn, collect: bool):
+    """Thread-pool runner (GIL-bound). Kept for A/B comparison only."""
+    latencies = [0.0] * n
+    results = [None] * n if collect else None
+    failed = {"n": 0}
+    lock = threading.Lock()
+
+    def worker(wid: int):
+        client = make_client(args, space)
+        try:
+            for i in range(wid, n, concurrency):
+                t0 = time.perf_counter()
+                try:
+                    r = task_fn(client, i)
+                    latencies[i] = (time.perf_counter() - t0) * 1000.0
+                    if collect:
+                        results[i] = r
+                except Exception:
+                    latencies[i] = (time.perf_counter() - t0) * 1000.0
+                    with lock:
+                        failed["n"] += 1
+        finally:
+            client.close()
+
+    t0 = time.perf_counter()
+    with ThreadPoolExecutor(max_workers=concurrency) as ex:
+        list(ex.map(worker, range(concurrency)))
+    wall = time.perf_counter() - t0
+    return latencies, results, failed["n"], wall
+
+
+def summarize(latencies: list[float], wall: float, n: int) -> dict:
+    lat = sorted(latencies)
+
+    def pct(p):
+        if not lat:
+            return 0.0
+        idx = min(len(lat) - 1, int(round(p / 100.0 * (len(lat) - 1))))
+        return lat[idx]
+
+    return {
+        "throughput_ops_sec": (n / wall) if wall > 0 else 0.0,
+        "mean_ms": statistics.fmean(latencies) if latencies else 0.0,
+        "p50_ms": pct(50),
+        "p95_ms": pct(95),
+        "p99_ms": pct(99),
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Search-result parsing
+# --------------------------------------------------------------------------- #
+def parse_search_ids(resp: dict) -> list[int]:
+    """Extract the ordered result ids from a search_topk/range_search response.
+
+    The server returns results as a JSON string in `message`, e.g.
+    '[{"id": 12, "distance": 0.34}, ...]'.
+    """
+    payload = resp.get("message", resp)
+    if isinstance(payload, str):
+        payload = json.loads(payload) if payload.strip() else []
+    if isinstance(payload, dict):
+        payload = payload.get("results", [])
+    ids = []
+    for item in payload:
+        if isinstance(item, dict) and "id" in item:
+            ids.append(int(item["id"]))
+        elif isinstance(item, (int, float)):
+            ids.append(int(item))
+    return ids
+
+
+# --------------------------------------------------------------------------- #
+# Exact ground-truth (for recall) via batched numpy
+# --------------------------------------------------------------------------- #
+def compute_ground_truth(base: np.ndarray, queries: np.ndarray, k: int,
+                         metric: str = "L2", candidate_ids: np.ndarray | None = None,
+                         batch: int = 64) -> np.ndarray:
+    """Exact top-k neighbor ids per query (ids are indices into `base`).
+
+    If `candidate_ids` is given, the search is restricted to that subset (used
+    for filtered-search recall). Supports L2 (smaller is better) and
+    InnerProduct (larger is better).
+    """
+    if candidate_ids is None:
+        cand = base
+        cand_ids = np.arange(base.shape[0])
+    else:
+        cand_ids = np.asarray(candidate_ids)
+        cand = base[cand_ids]
+
+    m = cand.shape[0]
+    kk = min(k, m)
+    out = np.full((queries.shape[0], k), -1, dtype=np.int64)
+    cand_sq = np.sum(cand * cand, axis=1)[None, :] if metric != "InnerProduct" else None
+
+    for i in range(0, queries.shape[0], batch):
+        qb = queries[i:i + batch]
+        if metric == "InnerProduct":
+            score = qb @ cand.T          # larger is better
+            part = np.argpartition(-score, kth=kk - 1, axis=1)[:, :kk]
+            order = np.argsort(-np.take_along_axis(score, part, axis=1), axis=1)
+        else:
+            score = -2.0 * (qb @ cand.T) + cand_sq   # rank by squared L2
+            part = np.argpartition(score, kth=kk - 1, axis=1)[:, :kk]
+            order = np.argsort(np.take_along_axis(score, part, axis=1), axis=1)
+        topk_local = np.take_along_axis(part, order, axis=1)
+        out[i:i + qb.shape[0], :kk] = cand_ids[topk_local]
+    return out
+
+
+def recall_at_k(returned_ids: list[int], gt_row: np.ndarray, k: int) -> float:
+    gt = set(int(x) for x in gt_row[:k] if x >= 0)
+    if not gt:
+        return 0.0
+    hit = len(gt.intersection(returned_ids[:k]))
+    return hit / len(gt)
+
+
+# --------------------------------------------------------------------------- #
+# Synthetic metadata (for metadata-filter benchmarks)
+# --------------------------------------------------------------------------- #
+N_CATEGORIES = 10
+N_YEARS = 25
+PRICE_RANGE = 1000
+
+
+def metadata_for_id(i: int) -> dict:
+    """Deterministic metadata for vector id i (reproducible across runs)."""
+    return {
+        "category": f"cat_{i % N_CATEGORIES}",
+        "price": float((i * 37) % PRICE_RANGE),
+        "year": 2000 + (i % N_YEARS),
+    }
+
+
+def metadata_field_spec() -> dict:
+    return {"category": "string", "price": "float", "year": "int"}
+
+
+def metadata_arrays(n: int):
+    """Vectorized metadata for ids [0, n) for fast filtered-GT computation."""
+    ids = np.arange(n)
+    return {
+        "category": ids % N_CATEGORIES,
+        "price": (ids * 37) % PRICE_RANGE,
+        "year": 2000 + (ids % N_YEARS),
+    }
+
+
+# Filter scenarios: (label, where-string, predicate over metadata_arrays -> bool mask).
+def filter_scenarios(n: int) -> list[dict]:
+    md = metadata_arrays(n)
+    return [
+        {
+            "label": "category_eq",
+            "where": "category=cat_0",
+            "mask": md["category"] == 0,
+            "selectivity": 1.0 / N_CATEGORIES,
+        },
+        {
+            "label": "year_between",
+            "where": "year BETWEEN 2010 AND 2014",
+            "mask": (md["year"] >= 2010) & (md["year"] <= 2014),
+            "selectivity": 5.0 / N_YEARS,
+        },
+        {
+            "label": "price_lt_500_and_cat_in",
+            "where": "price<500 AND category IN (cat_0, cat_1, cat_2)",
+            "mask": (md["price"] < 500) & (md["category"] < 3),
+            "selectivity": 0.5 * (3.0 / N_CATEGORIES),
+        },
+    ]
+
+
+# --------------------------------------------------------------------------- #
+# Unified result schema + writer
+# --------------------------------------------------------------------------- #
+@dataclass
+class Result:
+    suite: str                # vector_search | metadata_filter | key_value
+    operation: str            # insert | search | filtered_search | put | get | delete
+    engine: str               # vector | key-value
+    index_type: str = ""
+    metric: str = ""
+    wal: bool = False
+    num_base: int = 0
+    k: int = 0
+    concurrency: int = 0
+    scenario: str = ""        # filter label (metadata suite)
+    selectivity: float = -1.0
+    ops: int = 0
+    throughput_ops_sec: float = 0.0
+    recall_at_k: float = -1.0  # -1 == not applicable
+    mean_ms: float = 0.0
+    p50_ms: float = 0.0
+    p95_ms: float = 0.0
+    p99_ms: float = 0.0
+    failed: int = 0
+
+
+class ResultWriter:
+    """Accumulates Result rows and saves CSV + JSON (with env) incrementally."""
+
+    def __init__(self, out_path: str, env: dict):
+        self.out_path = out_path
+        self.env = env
+        self.rows: list[Result] = []
+        os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
+
+    def add(self, r: Result):
+        self.rows.append(r)
+        self.flush()
+
+    def flush(self):
+        import csv
+
+        if not self.rows:
+            return
+        fields = list(asdict(self.rows[0]).keys())
+        with open(self.out_path, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=fields)
+            w.writeheader()
+            for r in self.rows:
+                w.writerow(asdict(r))
+        json_path = os.path.splitext(self.out_path)[0] + ".json"
+        with open(json_path, "w") as f:
+            json.dump({"env": self.env, "results": [asdict(r) for r in self.rows]}, f, indent=2)
+
+
+# --------------------------------------------------------------------------- #
+# Environment capture (reproducibility)
+# --------------------------------------------------------------------------- #
+def _git_commit() -> str:
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stderr=subprocess.DEVNULL,
+        ).decode().strip()
+    except Exception:
+        return "unknown"
+
+
+def _client_version() -> str:
+    try:
+        import shibudb_client
+        return getattr(shibudb_client, "__version__", "unknown")
+    except Exception:
+        return "unknown"
+
+
+def load_server_info_file(path: str | None) -> dict:
+    """Load optional server hardware/metadata JSON for reproducibility."""
+    if not path:
+        return {}
+    with open(path) as f:
+        data = json.load(f)
+    if not isinstance(data, dict):
+        raise ValueError(f"server info file must be a JSON object: {path}")
+    return data
+
+
+def compute_data_scale(args, suites: set[str] | None = None) -> dict:
+    """Summarize dataset size and approximate data volume for the report."""
+    if suites is None:
+        suites = set(getattr(args, "suites", []) or [])
+        if "all" in suites:
+            suites = {"vector", "metadata", "kv"}
+
+    num_base = int(getattr(args, "num_base", 0) or 0)
+    num_queries = int(getattr(args, "num_queries", 0) or 0)
+    dimension = int(getattr(args, "dimension", 128) or 128)
+    k = int(getattr(args, "k", 10) or 10)
+    kv_keys = int(getattr(args, "kv_keys", 0) or 0)
+    kv_value_size = int(getattr(args, "kv_value_size", 100) or 100)
+    bytes_per_component = 4  # float32 vectors sent by the client
+
+    vector_base_bytes = num_base * dimension * bytes_per_component
+    vector_query_bytes = num_queries * dimension * bytes_per_component
+    # key names are ~8 bytes ("key_12345") plus the fixed value payload
+    kv_key_bytes_approx = 8
+    kv_total_bytes = kv_keys * (kv_key_bytes_approx + kv_value_size) if kv_keys else 0
+
+    active = []
+    if "vector" in suites:
+        active.append("vector_search")
+    if "metadata" in suites:
+        active.append("metadata_filter")
+    if "kv" in suites:
+        active.append("key_value")
+
+    full_sift = num_base >= 1_000_000
+    return {
+        "dataset": "SIFT1M",
+        "suites": sorted(active),
+        "num_base": num_base,
+        "num_queries": num_queries,
+        "dimension": dimension,
+        "k": k,
+        "metric": getattr(args, "metric", "L2"),
+        "full_sift_base": full_sift,
+        "vector_base_bytes": vector_base_bytes,
+        "vector_query_bytes": vector_query_bytes,
+        "kv_keys": kv_keys,
+        "kv_value_size_bytes": kv_value_size,
+        "kv_total_bytes_approx": kv_total_bytes,
+    }
+
+
+def total_ram_gb() -> float | None:
+    """Total physical RAM of this machine in GB, or None if undetectable."""
+    try:
+        pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        if pages > 0 and page_size > 0:
+            return round(pages * page_size / (1024 ** 3), 1)
+    except (ValueError, OSError, AttributeError):
+        pass
+    try:  # macOS fallback
+        out = subprocess.run(["sysctl", "-n", "hw.memsize"],
+                             capture_output=True, text=True, timeout=5)
+        return round(int(out.stdout.strip()) / (1024 ** 3), 1)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def cpu_model() -> str:
+    """Human-readable CPU model (e.g. 'Apple M2 Pro'), best effort."""
+    if platform.system() == "Darwin":
+        try:
+            out = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
+                                 capture_output=True, text=True, timeout=5)
+            name = out.stdout.strip()
+            if name:
+                return name
+        except (OSError, subprocess.SubprocessError):
+            pass
+    elif platform.system() == "Linux":
+        try:
+            with open("/proc/cpuinfo") as f:
+                for line in f:
+                    if line.lower().startswith("model name"):
+                        return line.split(":", 1)[1].strip()
+        except OSError:
+            pass
+    return platform.processor() or platform.machine()
+
+
+def capture_env(args) -> dict:
+    suites = set(getattr(args, "suites", []) or [])
+    if "all" in suites:
+        suites = {"vector", "metadata", "kv"}
+
+    server_info = load_server_info_file(getattr(args, "server_info_file", None))
+    extra_info = {k: v for k, v in server_info.items() if k not in ("version", "commit")}
+    server = {
+        "host": args.host,
+        "port": args.port,
+        "version": getattr(args, "server_version", None) or server_info.get("version") or "unknown",
+        "commit": getattr(args, "server_commit", None) or server_info.get("commit") or "unknown",
+        **extra_info,
+    }
+    client = {
+        "host": socket.gethostname(),
+        "platform": platform.platform(),
+        "processor": cpu_model(),
+        "cpu_count": os.cpu_count(),
+        "ram_gb": total_ram_gb(),
+    }
+    data_scale = compute_data_scale(args, suites)
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "git_commit": _git_commit(),
+        "shibudb_client_version": _client_version(),
+        "python_version": platform.python_version(),
+        "dataset": "SIFT1M",
+        "client": client,
+        "server": server,
+        "data_scale": data_scale,
+        # Legacy flat keys (older result JSON + scripts that read these directly)
+        "client_host": client["host"],
+        "server_host": server["host"],
+        "server_port": server["port"],
+        "platform": client["platform"],
+        "processor": client["processor"],
+        "cpu_count": client["cpu_count"],
+        "args": {k: v for k, v in vars(args).items() if k != "password"},
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Space helpers
+# --------------------------------------------------------------------------- #
+def create_space(args, space: str, engine_type: str, **kwargs) -> None:
+    client = make_client(args)
+    try:
+        if getattr(args, "drop_existing", False):
+            try:
+                client.delete_space(space)
+            except Exception:
+                pass
+        client.create_space(space, engine_type=engine_type, **kwargs)
+    finally:
+        client.close()
+
+
+def wait_for_searchable(args, space: str, sample_ids: list[int], vector: bool = True) -> float:
+    """Block until a sample of inserted ids is retrievable (persistence lag)."""
+    client = make_client(args, space)
+    t0 = time.perf_counter()
+    deadline = t0 + args.settle_timeout
+    try:
+        while time.perf_counter() < deadline:
+            ok = True
+            for sid in sample_ids:
+                try:
+                    if vector:
+                        client.get_vector(sid)
+                    else:
+                        client.get(str(sid))
+                except Exception:
+                    ok = False
+                    break
+            if ok:
+                return time.perf_counter() - t0
+            time.sleep(1.0)
+    finally:
+        client.close()
+    print(f"[settle] WARNING: sample not retrievable within {args.settle_timeout}s", flush=True)
+    return time.perf_counter() - t0

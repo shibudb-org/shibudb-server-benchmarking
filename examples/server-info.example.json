@@ -1,0 +1,10 @@
+{
+  "hostname": "bench-server-01",
+  "platform": "Linux 6.8 (Ubuntu 24.04)",
+  "processor": "AMD EPYC 7763",
+  "cpu_count": 64,
+  "ram_gb": 256,
+  "disk": "1 TB NVMe (local)",
+  "network": "10 Gbps, same availability zone as benchmark client",
+  "notes": "ShibuDB server only — benchmark client runs on a separate host"
+}
