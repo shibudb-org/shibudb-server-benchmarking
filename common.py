@@ -23,6 +23,9 @@ from datetime import datetime, timezone
 
 import numpy as np
 
+import machine_info
+from machine_info import cpu_model, total_ram_gb
+
 try:
     from shibudb_client import ConnectionConfig, ParallelExecutor, ShibuDbClient
 except ImportError:  # pragma: no cover
@@ -393,43 +396,8 @@ def compute_data_scale(args, suites: set[str] | None = None) -> dict:
     }
 
 
-def total_ram_gb() -> float | None:
-    """Total physical RAM of this machine in GB, or None if undetectable."""
-    try:
-        pages = os.sysconf("SC_PHYS_PAGES")
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        if pages > 0 and page_size > 0:
-            return round(pages * page_size / (1024 ** 3), 1)
-    except (ValueError, OSError, AttributeError):
-        pass
-    try:  # macOS fallback
-        out = subprocess.run(["sysctl", "-n", "hw.memsize"],
-                             capture_output=True, text=True, timeout=5)
-        return round(int(out.stdout.strip()) / (1024 ** 3), 1)
-    except (OSError, ValueError, subprocess.SubprocessError):
-        return None
-
-
-def cpu_model() -> str:
-    """Human-readable CPU model (e.g. 'Apple M2 Pro'), best effort."""
-    if platform.system() == "Darwin":
-        try:
-            out = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"],
-                                 capture_output=True, text=True, timeout=5)
-            name = out.stdout.strip()
-            if name:
-                return name
-        except (OSError, subprocess.SubprocessError):
-            pass
-    elif platform.system() == "Linux":
-        try:
-            with open("/proc/cpuinfo") as f:
-                for line in f:
-                    if line.lower().startswith("model name"):
-                        return line.split(":", 1)[1].strip()
-        except OSError:
-            pass
-    return platform.processor() or platform.machine()
+def _is_local_host(host: str) -> bool:
+    return host in ("localhost", "127.0.0.1", "::1", socket.gethostname())
 
 
 def capture_env(args) -> dict:
@@ -439,6 +407,10 @@ def capture_env(args) -> dict:
 
     server_info = load_server_info_file(getattr(args, "server_info_file", None))
     extra_info = {k: v for k, v in server_info.items() if k not in ("version", "commit")}
+    if not extra_info and _is_local_host(args.host):
+        # Server co-located with the client: its hardware is this machine's.
+        extra_info = machine_info.collect()
+        extra_info["notes"] = "auto-detected (server co-located with benchmark client)"
     server = {
         "host": args.host,
         "port": args.port,

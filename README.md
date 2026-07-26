@@ -29,6 +29,7 @@ Three suites, each swept across **WAL off and WAL on** and multiple concurrency 
 | `bench_metadata.py` | Metadata-filtered search sweep |
 | `bench_kv.py` | Key-value PUT/GET/DELETE sweep |
 | `benchmark.py` | Orchestrator (`--suites`), writes unified CSV + JSON |
+| `machine_info.py` | Stdlib-only hardware detector — generates `server-info.json` on any host |
 | `plot.py` | Charts for all suites |
 | `report.py` | Markdown report for GitHub Pages (`docs/BENCHMARKS.md`) |
 | `docs/` | GitHub Pages site (`index.md` + generated `BENCHMARKS.md`) |
@@ -56,10 +57,13 @@ make start-local-server   # localhost:4444, admin/admin
 > it takes many hours. All smaller / customized runs come in the next section.
 
 ```bash
-# 0. Record server build + hardware once (edit examples/server-info.example.json for your host)
-SERVER_INFO=examples/server-info.example.json
-SERVER_VER=v1.0.0
-SERVER_SHA=abc123def456
+# 0. Record server build + hardware once — auto-generated on the SERVER host:
+#      python3 machine_info.py --server-repo ~/src/shibudb-server --out server-info.json
+#    (stdlib-only: copy machine_info.py alone to the server, no pip install needed;
+#     then copy server-info.json back here)
+SERVER_INFO=server-info.json
+SERVER_VER=$(git -C ~/src/shibudb-server describe --tags --always)
+SERVER_SHA=$(git -C ~/src/shibudb-server rev-parse HEAD)
 
 # 1. Vector suite: ALL index types (Flat, HNSW8-64, IVF*, PQ*), WAL off + on
 python benchmark.py --suites vector --both-wal \
@@ -185,6 +189,22 @@ Add the Pages URL to the repo **About → Website** field so it shows next to th
 These are captured into the results JSON at benchmark time and rendered prominently
 in the generated report. You can also pass them to `report.py` when regenerating a
 report from older result files.
+
+**Auto-filling them:**
+
+- **Server on a separate machine** — run the bundled detector on the server host
+  (stdlib-only, just copy the one file over):
+
+```bash
+python3 machine_info.py --server-repo ~/src/shibudb-server --out server-info.json
+# detects hostname, OS, CPU model, cores, RAM, disk; --server-repo also fills
+# version (git describe) and commit (git rev-parse) — then copy the JSON back
+```
+
+- **Server on localhost** — nothing to do: `benchmark.py` detects that the server
+  is co-located with the client and fills its hardware automatically (marked
+  "auto-detected" in the report). You still may pass `--server-version` /
+  `--server-commit` since the build can't be detected over TCP.
 
 ## Methodology notes / caveats (read before publishing)
 
