@@ -105,7 +105,8 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-def benchmark_cmd(args, suite: str, size: int, out_csv: str) -> list[str]:
+def benchmark_cmd(args, suite: str, size: int, out_csv: str,
+                  index_type: str | None = None) -> list[str]:
     cmd = [
         sys.executable, os.path.join(HERE, "benchmark.py"),
         "--suites", suite,
@@ -123,8 +124,8 @@ def benchmark_cmd(args, suite: str, size: int, out_csv: str) -> list[str]:
     else:
         cmd += ["--num-base", str(size), "--num-queries", str(args.num_queries),
                 "--k", str(args.k), "--ingest-concurrency", str(args.ingest_concurrency)]
-        if suite == "vector" and args.index_types:
-            cmd += ["--index-types", *args.index_types]
+        if suite == "vector" and index_type:
+            cmd += ["--index-types", index_type]
     if args.server_version:
         cmd += ["--server-version", args.server_version]
     if args.server_commit:
@@ -154,18 +155,34 @@ def main():
     args = build_parser().parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
 
-    runs = [(suite, size) for size in args.sizes for suite in args.suites]
+    from bench_vector import DEFAULT_INDEX_TYPES
+    index_types = args.index_types or DEFAULT_INDEX_TYPES
+
+    # One run per test unit: vector runs are split per index type so each
+    # index gets its own CSV/log ({suite}_{index}_{size}_{queries}).
+    runs: list[tuple[str, int, str | None]] = []
+    for size in args.sizes:
+        for suite in args.suites:
+            if suite == "vector":
+                runs.extend((suite, size, idx) for idx in index_types)
+            else:
+                runs.append((suite, size, None))
+
     print(f"Matrix: {len(runs)} run(s) — sizes={args.sizes} suites={args.suites} "
-          f"concurrency={args.concurrency} num_queries={args.num_queries} "
-          f"both_wal={args.both_wal}", flush=True)
+          f"index_types={index_types} concurrency={args.concurrency} "
+          f"num_queries={args.num_queries} both_wal={args.both_wal}", flush=True)
 
     outputs: list[tuple[str, str]] = []  # (stem, csv path)
-    for i, (suite, size) in enumerate(runs, 1):
-        stem = f"{suite}_{size}_{args.num_queries}"
+    for i, (suite, size, index_type) in enumerate(runs, 1):
+        if index_type:
+            stem = f"{suite}_{index_type.replace(',', '-')}_{size}_{args.num_queries}"
+        else:
+            stem = f"{suite}_{size}_{args.num_queries}"
         out_csv = os.path.join(args.out_dir, f"{stem}.csv")
         log_path = os.path.join(args.out_dir, f"{stem}.log")
         print(f"\n=== [{i}/{len(runs)}] {stem} ===", flush=True)
-        run_logged(benchmark_cmd(args, suite, size, out_csv), log_path, args.dry_run)
+        run_logged(benchmark_cmd(args, suite, size, out_csv, index_type),
+                   log_path, args.dry_run)
         outputs.append((stem, out_csv))
 
         if args.report:

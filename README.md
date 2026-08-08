@@ -77,8 +77,10 @@ python run_full.py \
 #       --server-info-file, --no-report, --dry-run (print commands only)
 ```
 
-Outputs per run: `results/vector_10000_5000.csv` + `.json` + `.log`,
-`results/kv_10000_5000.csv` + …, with charts under `results/charts/<name>/`.
+Vector runs are split **per index type**, each with its own CSV + JSON + log:
+`results/vector_Flat_10000_5000.csv`, `results/vector_HNSW32_10000_5000.csv`,
+`results/vector_IVF256-Flat_10000_5000.csv`, … KV/metadata runs are per size:
+`results/kv_10000_5000.csv`, … Charts go under `results/charts/<name>/`.
 
 **The report is incremental:** after *each* run finishes, `docs/BENCHMARKS.md`
 and `results/benchmark_report.zip` are regenerated to cover everything completed
