@@ -623,14 +623,15 @@ def _copy_charts(sources: list[tuple[str, str]], dest_dir: str) -> None:
     os.makedirs(dest_dir, exist_ok=True)
     copied = 0
     for charts_dir, subdir in sources:
-        if not charts_dir or not os.path.isdir(charts_dir):
+        src_root = os.path.join(charts_dir, subdir) if subdir else charts_dir
+        if not src_root or not os.path.isdir(src_root):
             continue
         target_root = os.path.join(dest_dir, subdir) if subdir else dest_dir
         os.makedirs(target_root, exist_ok=True)
-        for name in os.listdir(charts_dir):
+        for name in os.listdir(src_root):
             if not name.endswith(".png"):
                 continue
-            src = os.path.join(charts_dir, name)
+            src = os.path.join(src_root, name)
             dst = os.path.join(target_root, name)
             shutil.copy2(src, dst)
             copied += 1
@@ -679,12 +680,57 @@ def _create_zip(
         for path in csv_paths:
             if os.path.isfile(path):
                 zf.write(path, arcname=f"raw-results/{os.path.basename(path)}")
-            json_path = os.path.splitext(path)[0] + ".json"
-            if os.path.isfile(json_path):
-                zf.write(json_path, arcname=f"raw-results/{os.path.basename(json_path)}")
+            for ext in (".json", ".log"):
+                sidecar = os.path.splitext(path)[0] + ext
+                if os.path.isfile(sidecar):
+                    zf.write(sidecar, arcname=f"raw-results/{os.path.basename(sidecar)}")
 
     size = os.path.getsize(zip_path)
     print(f"Wrote {zip_path} ({_human_bytes(size)})", flush=True)
+
+
+_MAX_LOG_LINES = 3000
+
+
+def _logs_section(csv_paths: list[str]) -> str:
+    """Embed each run's full console log (command + progress + summary) in
+    collapsible blocks, from the `.log` sidecar next to each CSV."""
+    blocks = []
+    for path in csv_paths:
+        log_path = os.path.splitext(path)[0] + ".log"
+        if not os.path.isfile(log_path):
+            continue
+        with open(log_path, errors="replace") as f:
+            lines = f.read().splitlines()
+        if len(lines) > _MAX_LOG_LINES:
+            half = _MAX_LOG_LINES // 2
+            lines = (lines[:half]
+                     + ["", f"[... {len(lines) - _MAX_LOG_LINES} lines truncated — "
+                            "full log in the zip bundle ...]", ""]
+                     + lines[-half:])
+        content = "\n".join(lines).replace("````", "```\u200b`")
+        blocks.extend([
+            "<details>",
+            f"<summary><b><code>{os.path.basename(log_path)}</code></b> — full run output "
+            "(command, progress, summary)</summary>",
+            "",
+            "````text",
+            content,
+            "````",
+            "",
+            "</details>",
+            "",
+        ])
+    if not blocks:
+        return ""
+    return "\n".join([
+        "## Run logs",
+        "",
+        "Complete console output of every benchmark run, including the exact "
+        "command that produced it.",
+        "",
+        *blocks,
+    ])
 
 
 def _resolve_inputs(csv_paths: list[str]) -> list[tuple[list[dict], dict | None, str]]:
@@ -704,6 +750,7 @@ def generate_report(
     inputs: list[tuple[list[dict], dict | None, str]],
     chart_prefixes: list[str],
     env_overrides: dict | None = None,
+    log_sources: list[str] | None = None,
 ) -> str:
     all_rows: list[dict] = []
     env_blocks: list[tuple[str, dict]] = []
@@ -764,6 +811,11 @@ def generate_report(
                 block = section_fn(rows, cp)
                 if block:
                     parts.extend([block, ""])
+
+    if log_sources:
+        logs_block = _logs_section(log_sources)
+        if logs_block:
+            parts.extend([logs_block, ""])
 
     parts.append(METHODOLOGY)
     parts.extend([
@@ -849,6 +901,7 @@ def main():
         inputs,
         chart_prefixes if len(args.csv) > 1 else chart_prefixes[:1],
         env_overrides=env_overrides or None,
+        log_sources=args.csv,
     )
 
     out_dir = os.path.dirname(os.path.abspath(args.out))

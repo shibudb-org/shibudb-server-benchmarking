@@ -1,0 +1,124 @@
+{
+  "timestamp": "2026-07-27T11:36:45.551075+00:00",
+  "git_commit": "9121378dcf75ebab4730bc42f3119f3820573ee1",
+  "shibudb_client_version": "unknown",
+  "python_version": "3.9.6",
+  "dataset": "SIFT1M",
+  "client": {
+    "host": "GP79D9QYJQ",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "processor": "Apple M3 Pro",
+    "cpu_count": 12,
+    "ram_gb": 36.0
+  },
+  "server": {
+    "host": "localhost",
+    "port": 4444,
+    "version": "unknown",
+    "commit": "unknown",
+    "hostname": "GP79D9QYJQ",
+    "platform": "macOS-26.4.1-arm64-arm-64bit",
+    "processor": "Apple M3 Pro",
+    "cpu_count": 12,
+    "ram_gb": 36.0,
+    "disk": "926 GB total (/)",
+    "notes": "auto-detected (server co-located with benchmark client)"
+  },
+  "data_scale": {
+    "dataset": "SIFT1M",
+    "suites": [
+      "vector_search"
+    ],
+    "num_base": 1000000,
+    "num_queries": 10000,
+    "dimension": 128,
+    "k": 10,
+    "metric": "L2",
+    "full_sift_base": true,
+    "vector_base_bytes": 512000000,
+    "vector_query_bytes": 5120000,
+    "kv_keys": 100000,
+    "kv_value_size_bytes": 100,
+    "kv_total_bytes_approx": 10800000
+  },
+  "client_host": "GP79D9QYJQ",
+  "server_host": "localhost",
+  "server_port": 4444,
+  "platform": "macOS-26.4.1-arm64-arm-64bit",
+  "processor": "Apple M3 Pro",
+  "cpu_count": 12,
+  "args": {
+    "host": "localhost",
+    "port": 4444,
+    "user": "admin",
+    "timeout": 120,
+    "server_version": "",
+    "server_commit": "",
+    "server_info_file": "",
+    "suites": [
+      "vector"
+    ],
+    "data_dir": "/Users/pawasthi/.shibudb-benchmarks/data",
+    "num_base": 1000000,
+    "num_queries": 10000,
+    "k": 10,
+    "dimension": 128,
+    "index_types": [
+      "Flat",
+      "HNSW8",
+      "HNSW16",
+      "HNSW32",
+      "HNSW64",
+      "IVF64,Flat",
+      "IVF128,Flat",
+      "IVF256,Flat",
+      "IVF256,PQ8",
+      "IVF256,PQ16",
+      "PQ8",
+      "PQ16"
+    ],
+    "metric": "L2",
+    "both_wal": true,
+    "enable_wal": false,
+    "kv_keys": 100000,
+    "kv_value_size": 100,
+    "concurrency": [
+      1,
+      8,
+      32,
+      64,
+      128
+    ],
+    "ingest_concurrency": 32,
+    "client_parallelism": "process",
+    "settle_timeout": 600,
+    "drop_existing": true,
+    "cleanup": false,
+    "space_prefix": "bench",
+    "out": "results/sift1m_vector.csv"
+  }
+}
+Loaded SIFT1M: base=(1000000, 128) query=(10000, 128) groundtruth=(10000, 100)
+[gt] using canonical SIFT ground-truth
+
+=== VECTOR index=Flat wal=False ===
+[ingest] 41733 vec/s (24.0s, 0 failed)
+[query] c=1    QPS=    16.0 recall@10=0.9993 p99=77.49ms failed=0
+[query] c=8    QPS=    47.7 recall@10=0.9993 p99=285.43ms failed=0
+[query] c=32   QPS=    16.0 recall@10=0.9993 p99=8174.95ms failed=0
+[query] c=64   QPS=    11.3 recall@10=0.9993 p99=27890.47ms failed=0
+Traceback (most recent call last):
+  File "/Users/pawasthi/learn_source/Db/shibudb-server-benchmarking/benchmark.py", line 124, in <module>
+  File "/Users/pawasthi/learn_source/Db/shibudb-server-benchmarking/benchmark.py", line 107, in main
+  File "/Users/pawasthi/learn_source/Db/shibudb-server-benchmarking/bench_vector.py", line 114, in run
+  File "/Users/pawasthi/learn_source/Db/shibudb-server-benchmarking/common.py", line 84, in run_phase
+  File "/Users/pawasthi/learn_source/Db/shibudb-server-benchmarking/.venv/lib/python3.9/site-packages/shibudb_client.py", line 1578, in run
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/context.py", line 119, in Pool
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/pool.py", line 212, in __init__
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/pool.py", line 303, in _repopulate_pool
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/pool.py", line 326, in _repopulate_pool_static
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/process.py", line 121, in start
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/context.py", line 277, in _Popen
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/popen_fork.py", line 19, in __init__
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/popen_fork.py", line 65, in _launch
+OSError: [Errno 24] Too many open files
