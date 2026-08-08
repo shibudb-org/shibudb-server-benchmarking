@@ -7,8 +7,6 @@ synthetic fixed-size values.
 
 from __future__ import annotations
 
-import time
-
 from common import (
     Result,
     ResultWriter,
@@ -27,7 +25,7 @@ def run(args, writer: ResultWriter):
     wal_modes = [False, True] if args.both_wal else [args.enable_wal]
 
     for wal in wal_modes:
-        space = f"{args.space_prefix}_kv_wal{int(wal)}_{int(time.time())}"
+        space = f"{args.space_prefix}_kv_wal{int(wal)}"
         print(f"\n=== KEY-VALUE wal={wal} ===", flush=True)
         create_space(args, space, "key-value", enable_wal=wal)
 

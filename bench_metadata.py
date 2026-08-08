@@ -12,8 +12,6 @@ ingest-with-metadata throughput.
 
 from __future__ import annotations
 
-import time
-
 import numpy as np
 
 from common import (
@@ -57,7 +55,7 @@ def run(args, base, queries, writer: ResultWriter):
     wal_modes = [False, True] if args.both_wal else [args.enable_wal]
 
     for wal in wal_modes:
-        space = f"{args.space_prefix}_meta_wal{int(wal)}_{int(time.time())}"
+        space = f"{args.space_prefix}_meta_wal{int(wal)}"
         print(f"\n=== METADATA-FILTER (Flat) wal={wal} ===", flush=True)
         create_space(args, space, "vector", dimension=args.dimension,
                      index_type="Flat", metric=args.metric, enable_wal=wal,

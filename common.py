@@ -349,6 +349,26 @@ def load_server_info_file(path: str | None) -> dict:
     return data
 
 
+def purge_bench_spaces(args) -> int:
+    """Delete ALL spaces starting with the benchmark prefix (leftovers from
+    crashed/interrupted runs included). Returns the number deleted."""
+    prefix = f"{args.space_prefix}_"
+    client = make_client(args)
+    try:
+        resp = client.list_spaces()
+        spaces = resp.get("spaces", []) if isinstance(resp, dict) else list(resp or [])
+        stale = [s for s in spaces if isinstance(s, str) and s.startswith(prefix)]
+        for space in stale:
+            try:
+                client.delete_space(space)
+                print(f"[purge] deleted leftover space {space}", flush=True)
+            except Exception as exc:
+                print(f"[purge] could not delete {space}: {exc}", flush=True)
+        return len(stale)
+    finally:
+        client.close()
+
+
 def compute_data_scale(args, suites: set[str] | None = None) -> dict:
     """Summarize dataset size and approximate data volume for the report."""
     if suites is None:

@@ -82,7 +82,9 @@ def run(args, base, queries, sift_gt, writer: ResultWriter):
 
     for index_type in args.index_types:
         for wal in wal_modes:
-            space = f"{args.space_prefix}_vec_{index_type.replace(',', '_')}_wal{int(wal)}_{int(time.time())}"
+            # Deterministic name: lets --drop-existing reclaim leftovers from
+            # crashed runs instead of leaking timestamped spaces forever.
+            space = f"{args.space_prefix}_vec_{index_type.replace(',', '_')}_wal{int(wal)}"
             print(f"\n=== VECTOR index={index_type} wal={wal} ===", flush=True)
             create_space(args, space, "vector", dimension=args.dimension,
                          index_type=index_type, metric=args.metric, enable_wal=wal)
