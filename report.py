@@ -783,11 +783,13 @@ def generate_report(
         primary_rows = inputs[0][0]
         parts.append(_env_section(primary_env, primary_rows))
         if len(env_blocks) > 1:
+            rows_by_label = {label: rows for rows, _, label in inputs}
             parts.extend(["", "<details>", "<summary>Additional run environments</summary>", ""])
-            for (rows, _, label), (_, env, _) in zip(inputs[1:], env_blocks[1:]):
+            for label, env in env_blocks[1:]:
                 parts.append(f"**{label}**")
                 parts.append("")
-                parts.append(_env_section(_normalize_env(env, env_overrides), rows))
+                parts.append(_env_section(_normalize_env(env, env_overrides),
+                                          rows_by_label.get(label, [])))
             parts.extend(["</details>", ""])
     else:
         parts.extend([
