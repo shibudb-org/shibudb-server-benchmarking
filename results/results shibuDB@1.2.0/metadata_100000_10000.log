@@ -1,0 +1,185 @@
+$ /home/<user>/shibudb-server-benchmarking/.venv/bin/python /home/<user>/shibudb-server-benchmarking/benchmark.py --suites metadata --concurrency 1 2 4 8 16 --host localhost --port 4444 --user admin --password <redacted> --drop-existing --cleanup --out results/metadata_100000_10000.csv --both-wal --num-base 100000 --num-queries 10000 --k 10 --ingest-concurrency 16 --post-ingest-wait 60
+# started: 2026-08-11 12:23:54 UTC
+
+{
+  "timestamp": "2026-08-11T12:23:54.957959+00:00",
+  "git_commit": "22b30f0351acb1f56cdbe77742f47c0e93a54067",
+  "shibudb_client_version": "unknown",
+  "python_version": "3.13.5",
+  "dataset": "SIFT1M",
+  "client": {
+    "host": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5
+  },
+  "server": {
+    "host": "localhost",
+    "port": 4444,
+    "version": "unknown",
+    "commit": "unknown",
+    "hostname": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5,
+    "disk": "10 GB total (/)",
+    "notes": "auto-detected (server co-located with benchmark client)"
+  },
+  "data_scale": {
+    "dataset": "SIFT1M",
+    "suites": [
+      "metadata_filter"
+    ],
+    "num_base": 100000,
+    "num_queries": 10000,
+    "dimension": 128,
+    "k": 10,
+    "metric": "L2",
+    "full_sift_base": false,
+    "vector_base_bytes": 51200000,
+    "vector_query_bytes": 5120000,
+    "kv_keys": 100000,
+    "kv_value_size_bytes": 100,
+    "kv_total_bytes_approx": 10800000
+  },
+  "client_host": "test2",
+  "server_host": "localhost",
+  "server_port": 4444,
+  "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+  "processor": "AMD EPYC 7B12",
+  "cpu_count": 16,
+  "args": {
+    "host": "localhost",
+    "port": 4444,
+    "user": "admin",
+    "timeout": 120,
+    "server_version": "",
+    "server_commit": "",
+    "server_info_file": "",
+    "suites": [
+      "metadata"
+    ],
+    "data_dir": "/home/<user>/.shibudb-benchmarks/data",
+    "num_base": 100000,
+    "num_queries": 10000,
+    "k": 10,
+    "dimension": 128,
+    "index_types": [
+      "Flat",
+      "HNSW8",
+      "HNSW16",
+      "HNSW32",
+      "HNSW64",
+      "IVF64,Flat",
+      "IVF128,Flat",
+      "IVF256,Flat",
+      "IVF256,PQ8",
+      "IVF256,PQ16",
+      "PQ8",
+      "PQ16"
+    ],
+    "metric": "L2",
+    "both_wal": true,
+    "enable_wal": false,
+    "kv_keys": 100000,
+    "kv_value_size": 100,
+    "concurrency": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "ingest_concurrency": 16,
+    "client_parallelism": "process",
+    "settle_timeout": 600,
+    "post_ingest_wait": 60,
+    "drop_existing": true,
+    "cleanup": true,
+    "space_prefix": "bench",
+    "out": "results/metadata_100000_10000.csv"
+  }
+}
+Loaded SIFT1M: base=(1000000, 128) query=(10000, 128) groundtruth=(10000, 100)
+[gt] computing filtered ground-truth per scenario...
+[gt]   category_eq: 10000 matching vectors (selectivity~0.100)
+[gt]   year_between: 20000 matching vectors (selectivity~0.200)
+[gt]   price_lt_500_and_cat_in: 15000 matching vectors (selectivity~0.150)
+
+=== METADATA-FILTER (Flat) wal=False ===
+[ingest+meta] 26713 vec/s (3.7s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[filtered] category_eq                  c=1    QPS=   149.5 recall@10=1.0000 p99=8.66ms failed=0
+[filtered] category_eq                  c=2    QPS=   273.5 recall@10=1.0000 p99=14.43ms failed=0
+[filtered] category_eq                  c=4    QPS=   544.4 recall@10=1.0000 p99=12.61ms failed=0
+[filtered] category_eq                  c=8    QPS=  1086.1 recall@10=1.0000 p99=12.56ms failed=0
+[filtered] category_eq                  c=16   QPS=  1865.1 recall@10=1.0000 p99=18.88ms failed=0
+[filtered] year_between                 c=1    QPS=    74.1 recall@10=1.0000 p99=15.81ms failed=0
+[filtered] year_between                 c=2    QPS=   140.2 recall@10=1.0000 p99=26.72ms failed=0
+[filtered] year_between                 c=4    QPS=   268.1 recall@10=1.0000 p99=25.03ms failed=0
+[filtered] year_between                 c=8    QPS=   528.4 recall@10=1.0000 p99=23.72ms failed=0
+[filtered] year_between                 c=16   QPS=   871.2 recall@10=1.0000 p99=35.26ms failed=0
+[filtered] price_lt_500_and_cat_in      c=1    QPS=    93.4 recall@10=1.0000 p99=13.17ms failed=0
+[filtered] price_lt_500_and_cat_in      c=2    QPS=   172.8 recall@10=1.0000 p99=22.44ms failed=0
+[filtered] price_lt_500_and_cat_in      c=4    QPS=   321.9 recall@10=1.0000 p99=20.98ms failed=0
+[filtered] price_lt_500_and_cat_in      c=8    QPS=   607.7 recall@10=1.0000 p99=20.65ms failed=0
+[filtered] price_lt_500_and_cat_in      c=16   QPS=  1019.9 recall@10=1.0000 p99=30.74ms failed=0
+
+=== METADATA-FILTER (Flat) wal=True ===
+[ingest+meta] 468 vec/s (213.7s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[filtered] category_eq                  c=1    QPS=   144.7 recall@10=1.0000 p99=8.97ms failed=0
+[filtered] category_eq                  c=2    QPS=   255.5 recall@10=1.0000 p99=15.25ms failed=0
+[filtered] category_eq                  c=4    QPS=   477.9 recall@10=1.0000 p99=14.46ms failed=0
+[filtered] category_eq                  c=8    QPS=   914.5 recall@10=1.0000 p99=14.45ms failed=0
+[filtered] category_eq                  c=16   QPS=  1549.6 recall@10=1.0000 p99=21.34ms failed=0
+[filtered] year_between                 c=1    QPS=    66.0 recall@10=1.0000 p99=18.15ms failed=0
+[filtered] year_between                 c=2    QPS=   130.0 recall@10=1.0000 p99=27.82ms failed=0
+[filtered] year_between                 c=4    QPS=   250.6 recall@10=1.0000 p99=26.62ms failed=0
+[filtered] year_between                 c=8    QPS=   484.1 recall@10=1.0000 p99=25.65ms failed=0
+[filtered] year_between                 c=16   QPS=   823.6 recall@10=1.0000 p99=36.77ms failed=0
+[filtered] price_lt_500_and_cat_in      c=1    QPS=    89.0 recall@10=1.0000 p99=13.69ms failed=0
+[filtered] price_lt_500_and_cat_in      c=2    QPS=   163.2 recall@10=1.0000 p99=23.29ms failed=0
+[filtered] price_lt_500_and_cat_in      c=4    QPS=   311.1 recall@10=1.0000 p99=21.20ms failed=0
+[filtered] price_lt_500_and_cat_in      c=8    QPS=   603.7 recall@10=1.0000 p99=21.01ms failed=0
+[filtered] price_lt_500_and_cat_in      c=16   QPS=  1021.8 recall@10=1.0000 p99=30.87ms failed=0
+
+=== Summary ===
+metadata_filter  insert           Flat           wal=0 c=16     26713.3 ops/s p99=4.61ms
+metadata_filter  filtered_search  Flat           wal=0 c=1    [category_eq]     149.5 ops/s p99=8.66ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=2    [category_eq]     273.5 ops/s p99=14.43ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=4    [category_eq]     544.4 ops/s p99=12.61ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=8    [category_eq]    1086.1 ops/s p99=12.56ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=16   [category_eq]    1865.1 ops/s p99=18.88ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=1    [year_between]      74.1 ops/s p99=15.81ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=2    [year_between]     140.2 ops/s p99=26.72ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=4    [year_between]     268.1 ops/s p99=25.03ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=8    [year_between]     528.4 ops/s p99=23.72ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=16   [year_between]     871.2 ops/s p99=35.26ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=1    [price_lt_500_and_cat_in]      93.4 ops/s p99=13.17ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=2    [price_lt_500_and_cat_in]     172.8 ops/s p99=22.44ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=4    [price_lt_500_and_cat_in]     321.9 ops/s p99=20.98ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=8    [price_lt_500_and_cat_in]     607.7 ops/s p99=20.65ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=0 c=16   [price_lt_500_and_cat_in]    1019.9 ops/s p99=30.74ms recall@10=1.0000
+metadata_filter  insert           Flat           wal=1 c=16       467.9 ops/s p99=41.60ms
+metadata_filter  filtered_search  Flat           wal=1 c=1    [category_eq]     144.7 ops/s p99=8.97ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=2    [category_eq]     255.5 ops/s p99=15.25ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=4    [category_eq]     477.9 ops/s p99=14.46ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=8    [category_eq]     914.5 ops/s p99=14.45ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=16   [category_eq]    1549.6 ops/s p99=21.34ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=1    [year_between]      66.0 ops/s p99=18.15ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=2    [year_between]     130.0 ops/s p99=27.82ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=4    [year_between]     250.6 ops/s p99=26.62ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=8    [year_between]     484.1 ops/s p99=25.65ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=16   [year_between]     823.6 ops/s p99=36.77ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=1    [price_lt_500_and_cat_in]      89.0 ops/s p99=13.69ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=2    [price_lt_500_and_cat_in]     163.2 ops/s p99=23.29ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=4    [price_lt_500_and_cat_in]     311.1 ops/s p99=21.20ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=8    [price_lt_500_and_cat_in]     603.7 ops/s p99=21.01ms recall@10=1.0000
+metadata_filter  filtered_search  Flat           wal=1 c=16   [price_lt_500_and_cat_in]    1021.8 ops/s p99=30.87ms recall@10=1.0000
+
+Wrote results/metadata_100000_10000.csv and results/metadata_100000_10000.json
+
+# finished: 2026-08-11 12:51:31 UTC (elapsed 1656s, exit code 0)

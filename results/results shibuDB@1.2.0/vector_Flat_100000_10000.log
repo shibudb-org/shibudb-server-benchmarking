@@ -1,0 +1,132 @@
+$ /home/<user>/shibudb-server-benchmarking/.venv/bin/python /home/<user>/shibudb-server-benchmarking/benchmark.py --suites vector --concurrency 1 2 4 8 16 --host localhost --port 4444 --user admin --password <redacted> --drop-existing --cleanup --out results/vector_Flat_100000_10000.csv --both-wal --num-base 100000 --num-queries 10000 --k 10 --ingest-concurrency 16 --post-ingest-wait 60 --index-types Flat
+# started: 2026-08-11 11:12:53 UTC
+
+{
+  "timestamp": "2026-08-11T11:12:53.934172+00:00",
+  "git_commit": "22b30f0351acb1f56cdbe77742f47c0e93a54067",
+  "shibudb_client_version": "unknown",
+  "python_version": "3.13.5",
+  "dataset": "SIFT1M",
+  "client": {
+    "host": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5
+  },
+  "server": {
+    "host": "localhost",
+    "port": 4444,
+    "version": "unknown",
+    "commit": "unknown",
+    "hostname": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5,
+    "disk": "10 GB total (/)",
+    "notes": "auto-detected (server co-located with benchmark client)"
+  },
+  "data_scale": {
+    "dataset": "SIFT1M",
+    "suites": [
+      "vector_search"
+    ],
+    "num_base": 100000,
+    "num_queries": 10000,
+    "dimension": 128,
+    "k": 10,
+    "metric": "L2",
+    "full_sift_base": false,
+    "vector_base_bytes": 51200000,
+    "vector_query_bytes": 5120000,
+    "kv_keys": 100000,
+    "kv_value_size_bytes": 100,
+    "kv_total_bytes_approx": 10800000
+  },
+  "client_host": "test2",
+  "server_host": "localhost",
+  "server_port": 4444,
+  "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+  "processor": "AMD EPYC 7B12",
+  "cpu_count": 16,
+  "args": {
+    "host": "localhost",
+    "port": 4444,
+    "user": "admin",
+    "timeout": 120,
+    "server_version": "",
+    "server_commit": "",
+    "server_info_file": "",
+    "suites": [
+      "vector"
+    ],
+    "data_dir": "/home/<user>/.shibudb-benchmarks/data",
+    "num_base": 100000,
+    "num_queries": 10000,
+    "k": 10,
+    "dimension": 128,
+    "index_types": [
+      "Flat"
+    ],
+    "metric": "L2",
+    "both_wal": true,
+    "enable_wal": false,
+    "kv_keys": 100000,
+    "kv_value_size": 100,
+    "concurrency": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "ingest_concurrency": 16,
+    "client_parallelism": "process",
+    "settle_timeout": 600,
+    "post_ingest_wait": 60,
+    "drop_existing": true,
+    "cleanup": true,
+    "space_prefix": "bench",
+    "out": "results/vector_Flat_100000_10000.csv"
+  }
+}
+Loaded SIFT1M: base=(1000000, 128) query=(10000, 128) groundtruth=(10000, 100)
+[gt] computing exact ground-truth (num_base=100000, metric=L2)...
+[gt] done in 6.9s
+
+=== VECTOR index=Flat wal=False ===
+[ingest] 25452 vec/s (3.9s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[query] c=1    QPS=   227.6 recall@10=0.9999 p99=5.06ms failed=0
+[query] c=2    QPS=   383.1 recall@10=0.9999 p99=9.35ms failed=0
+[query] c=4    QPS=   655.1 recall@10=0.9999 p99=9.98ms failed=0
+[query] c=8    QPS=  1292.7 recall@10=0.9999 p99=10.15ms failed=0
+[query] c=16   QPS=  1903.4 recall@10=0.9999 p99=13.40ms failed=0
+
+=== VECTOR index=Flat wal=True ===
+[ingest] 552 vec/s (181.0s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[query] c=1    QPS=   219.7 recall@10=0.9999 p99=5.30ms failed=0
+[query] c=2    QPS=   368.2 recall@10=0.9999 p99=9.59ms failed=0
+[query] c=4    QPS=   631.3 recall@10=0.9999 p99=10.24ms failed=0
+[query] c=8    QPS=  1226.8 recall@10=0.9999 p99=10.44ms failed=0
+[query] c=16   QPS=  1802.7 recall@10=0.9999 p99=14.00ms failed=0
+
+=== Summary ===
+vector_search    insert           Flat           wal=0 c=16     25452.5 ops/s p99=2.24ms
+vector_search    search           Flat           wal=0 c=1        227.6 ops/s p99=5.06ms recall@10=0.9999
+vector_search    search           Flat           wal=0 c=2        383.1 ops/s p99=9.35ms recall@10=0.9999
+vector_search    search           Flat           wal=0 c=4        655.1 ops/s p99=9.98ms recall@10=0.9999
+vector_search    search           Flat           wal=0 c=8       1292.7 ops/s p99=10.15ms recall@10=0.9999
+vector_search    search           Flat           wal=0 c=16      1903.4 ops/s p99=13.40ms recall@10=0.9999
+vector_search    insert           Flat           wal=1 c=16       552.4 ops/s p99=38.10ms
+vector_search    search           Flat           wal=1 c=1        219.7 ops/s p99=5.30ms recall@10=0.9999
+vector_search    search           Flat           wal=1 c=2        368.2 ops/s p99=9.59ms recall@10=0.9999
+vector_search    search           Flat           wal=1 c=4        631.3 ops/s p99=10.24ms recall@10=0.9999
+vector_search    search           Flat           wal=1 c=8       1226.8 ops/s p99=10.44ms recall@10=0.9999
+vector_search    search           Flat           wal=1 c=16      1802.7 ops/s p99=14.00ms recall@10=0.9999
+
+Wrote results/vector_Flat_100000_10000.csv and results/vector_Flat_100000_10000.json
+
+# finished: 2026-08-11 11:21:28 UTC (elapsed 515s, exit code 0)

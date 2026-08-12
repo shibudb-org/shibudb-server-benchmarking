@@ -1,0 +1,131 @@
+$ /home/<user>/shibudb-server-benchmarking/.venv/bin/python /home/<user>/shibudb-server-benchmarking/benchmark.py --suites vector --concurrency 1 2 4 8 16 --host localhost --port 4444 --user admin --password <redacted> --drop-existing --cleanup --out results/vector_IVF64-Flat_1000000_10000.csv --both-wal --num-base 1000000 --num-queries 10000 --k 10 --ingest-concurrency 16 --post-ingest-wait 60 --index-types IVF64,Flat
+# started: 2026-08-11 23:04:13 UTC
+
+{
+  "timestamp": "2026-08-11T23:04:13.849963+00:00",
+  "git_commit": "22b30f0351acb1f56cdbe77742f47c0e93a54067",
+  "shibudb_client_version": "unknown",
+  "python_version": "3.13.5",
+  "dataset": "SIFT1M",
+  "client": {
+    "host": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5
+  },
+  "server": {
+    "host": "localhost",
+    "port": 4444,
+    "version": "unknown",
+    "commit": "unknown",
+    "hostname": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5,
+    "disk": "10 GB total (/)",
+    "notes": "auto-detected (server co-located with benchmark client)"
+  },
+  "data_scale": {
+    "dataset": "SIFT1M",
+    "suites": [
+      "vector_search"
+    ],
+    "num_base": 1000000,
+    "num_queries": 10000,
+    "dimension": 128,
+    "k": 10,
+    "metric": "L2",
+    "full_sift_base": true,
+    "vector_base_bytes": 512000000,
+    "vector_query_bytes": 5120000,
+    "kv_keys": 100000,
+    "kv_value_size_bytes": 100,
+    "kv_total_bytes_approx": 10800000
+  },
+  "client_host": "test2",
+  "server_host": "localhost",
+  "server_port": 4444,
+  "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+  "processor": "AMD EPYC 7B12",
+  "cpu_count": 16,
+  "args": {
+    "host": "localhost",
+    "port": 4444,
+    "user": "admin",
+    "timeout": 120,
+    "server_version": "",
+    "server_commit": "",
+    "server_info_file": "",
+    "suites": [
+      "vector"
+    ],
+    "data_dir": "/home/<user>/.shibudb-benchmarks/data",
+    "num_base": 1000000,
+    "num_queries": 10000,
+    "k": 10,
+    "dimension": 128,
+    "index_types": [
+      "IVF64,Flat"
+    ],
+    "metric": "L2",
+    "both_wal": true,
+    "enable_wal": false,
+    "kv_keys": 100000,
+    "kv_value_size": 100,
+    "concurrency": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "ingest_concurrency": 16,
+    "client_parallelism": "process",
+    "settle_timeout": 600,
+    "post_ingest_wait": 60,
+    "drop_existing": true,
+    "cleanup": true,
+    "space_prefix": "bench",
+    "out": "results/vector_IVF64-Flat_1000000_10000.csv"
+  }
+}
+Loaded SIFT1M: base=(1000000, 128) query=(10000, 128) groundtruth=(10000, 100)
+[gt] using canonical SIFT ground-truth
+
+=== VECTOR index=IVF64,Flat wal=False ===
+[ingest] 27399 vec/s (36.5s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[query] c=1    QPS=   725.3 recall@10=0.6117 p99=2.15ms failed=0
+[query] c=2    QPS=   955.9 recall@10=0.6117 p99=3.24ms failed=0
+[query] c=4    QPS=  2086.6 recall@10=0.6117 p99=2.82ms failed=0
+[query] c=8    QPS=  2928.2 recall@10=0.6117 p99=3.20ms failed=0
+[query] c=16   QPS=  2737.0 recall@10=0.6117 p99=5.58ms failed=0
+
+=== VECTOR index=IVF64,Flat wal=True ===
+[ingest] 632 vec/s (1581.5s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[query] c=1    QPS=   823.3 recall@10=0.6263 p99=1.88ms failed=0
+[query] c=2    QPS=  1085.7 recall@10=0.6263 p99=2.84ms failed=0
+[query] c=4    QPS=  2258.4 recall@10=0.6263 p99=2.72ms failed=0
+[query] c=8    QPS=  3229.7 recall@10=0.6263 p99=2.91ms failed=0
+[query] c=16   QPS=  2995.3 recall@10=0.6263 p99=4.80ms failed=0
+
+=== Summary ===
+vector_search    insert           IVF64,Flat     wal=0 c=16     27398.5 ops/s p99=1.43ms
+vector_search    search           IVF64,Flat     wal=0 c=1        725.3 ops/s p99=2.15ms recall@10=0.6117
+vector_search    search           IVF64,Flat     wal=0 c=2        955.9 ops/s p99=3.24ms recall@10=0.6117
+vector_search    search           IVF64,Flat     wal=0 c=4       2086.6 ops/s p99=2.82ms recall@10=0.6117
+vector_search    search           IVF64,Flat     wal=0 c=8       2928.2 ops/s p99=3.20ms recall@10=0.6117
+vector_search    search           IVF64,Flat     wal=0 c=16      2737.0 ops/s p99=5.58ms recall@10=0.6117
+vector_search    insert           IVF64,Flat     wal=1 c=16       632.3 ops/s p99=32.84ms
+vector_search    search           IVF64,Flat     wal=1 c=1        823.3 ops/s p99=1.88ms recall@10=0.6263
+vector_search    search           IVF64,Flat     wal=1 c=2       1085.7 ops/s p99=2.84ms recall@10=0.6263
+vector_search    search           IVF64,Flat     wal=1 c=4       2258.4 ops/s p99=2.72ms recall@10=0.6263
+vector_search    search           IVF64,Flat     wal=1 c=8       3229.7 ops/s p99=2.91ms recall@10=0.6263
+vector_search    search           IVF64,Flat     wal=1 c=16      2995.3 ops/s p99=4.80ms recall@10=0.6263
+
+Wrote results/vector_IVF64-Flat_1000000_10000.csv and results/vector_IVF64-Flat_1000000_10000.json
+
+# finished: 2026-08-11 23:34:38 UTC (elapsed 1825s, exit code 0)

@@ -1,0 +1,132 @@
+$ /home/<user>/shibudb-server-benchmarking/.venv/bin/python /home/<user>/shibudb-server-benchmarking/benchmark.py --suites vector --concurrency 1 2 4 8 16 --host localhost --port 4444 --user admin --password <redacted> --drop-existing --cleanup --out results/vector_HNSW64_100000_10000.csv --both-wal --num-base 100000 --num-queries 10000 --k 10 --ingest-concurrency 16 --post-ingest-wait 60 --index-types HNSW64
+# started: 2026-08-11 11:37:54 UTC
+
+{
+  "timestamp": "2026-08-11T11:37:54.400637+00:00",
+  "git_commit": "22b30f0351acb1f56cdbe77742f47c0e93a54067",
+  "shibudb_client_version": "unknown",
+  "python_version": "3.13.5",
+  "dataset": "SIFT1M",
+  "client": {
+    "host": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5
+  },
+  "server": {
+    "host": "localhost",
+    "port": 4444,
+    "version": "unknown",
+    "commit": "unknown",
+    "hostname": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5,
+    "disk": "10 GB total (/)",
+    "notes": "auto-detected (server co-located with benchmark client)"
+  },
+  "data_scale": {
+    "dataset": "SIFT1M",
+    "suites": [
+      "vector_search"
+    ],
+    "num_base": 100000,
+    "num_queries": 10000,
+    "dimension": 128,
+    "k": 10,
+    "metric": "L2",
+    "full_sift_base": false,
+    "vector_base_bytes": 51200000,
+    "vector_query_bytes": 5120000,
+    "kv_keys": 100000,
+    "kv_value_size_bytes": 100,
+    "kv_total_bytes_approx": 10800000
+  },
+  "client_host": "test2",
+  "server_host": "localhost",
+  "server_port": 4444,
+  "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+  "processor": "AMD EPYC 7B12",
+  "cpu_count": 16,
+  "args": {
+    "host": "localhost",
+    "port": 4444,
+    "user": "admin",
+    "timeout": 120,
+    "server_version": "",
+    "server_commit": "",
+    "server_info_file": "",
+    "suites": [
+      "vector"
+    ],
+    "data_dir": "/home/<user>/.shibudb-benchmarks/data",
+    "num_base": 100000,
+    "num_queries": 10000,
+    "k": 10,
+    "dimension": 128,
+    "index_types": [
+      "HNSW64"
+    ],
+    "metric": "L2",
+    "both_wal": true,
+    "enable_wal": false,
+    "kv_keys": 100000,
+    "kv_value_size": 100,
+    "concurrency": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "ingest_concurrency": 16,
+    "client_parallelism": "process",
+    "settle_timeout": 600,
+    "post_ingest_wait": 60,
+    "drop_existing": true,
+    "cleanup": true,
+    "space_prefix": "bench",
+    "out": "results/vector_HNSW64_100000_10000.csv"
+  }
+}
+Loaded SIFT1M: base=(1000000, 128) query=(10000, 128) groundtruth=(10000, 100)
+[gt] computing exact ground-truth (num_base=100000, metric=L2)...
+[gt] done in 6.9s
+
+=== VECTOR index=HNSW64 wal=False ===
+[ingest] 19313 vec/s (5.2s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[query] c=1    QPS=  1790.3 recall@10=0.9521 p99=0.86ms failed=0
+[query] c=2    QPS=  2493.8 recall@10=0.9521 p99=1.15ms failed=0
+[query] c=4    QPS=  5017.1 recall@10=0.9521 p99=1.30ms failed=0
+[query] c=8    QPS=  7425.9 recall@10=0.9521 p99=1.65ms failed=0
+[query] c=16   QPS=  8530.0 recall@10=0.9521 p99=3.62ms failed=0
+
+=== VECTOR index=HNSW64 wal=True ===
+[ingest] 572 vec/s (174.9s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[query] c=1    QPS=  1734.2 recall@10=0.9519 p99=0.89ms failed=0
+[query] c=2    QPS=  2444.4 recall@10=0.9519 p99=1.18ms failed=0
+[query] c=4    QPS=  4927.9 recall@10=0.9519 p99=1.31ms failed=0
+[query] c=8    QPS=  7376.5 recall@10=0.9519 p99=1.70ms failed=0
+[query] c=16   QPS=  8409.0 recall@10=0.9519 p99=3.75ms failed=0
+
+=== Summary ===
+vector_search    insert           HNSW64         wal=0 c=16     19313.3 ops/s p99=6.19ms
+vector_search    search           HNSW64         wal=0 c=1       1790.3 ops/s p99=0.86ms recall@10=0.9521
+vector_search    search           HNSW64         wal=0 c=2       2493.8 ops/s p99=1.15ms recall@10=0.9521
+vector_search    search           HNSW64         wal=0 c=4       5017.1 ops/s p99=1.30ms recall@10=0.9521
+vector_search    search           HNSW64         wal=0 c=8       7425.9 ops/s p99=1.65ms recall@10=0.9521
+vector_search    search           HNSW64         wal=0 c=16      8530.0 ops/s p99=3.62ms recall@10=0.9521
+vector_search    insert           HNSW64         wal=1 c=16       571.7 ops/s p99=35.76ms
+vector_search    search           HNSW64         wal=1 c=1       1734.2 ops/s p99=0.89ms recall@10=0.9519
+vector_search    search           HNSW64         wal=1 c=2       2444.4 ops/s p99=1.18ms recall@10=0.9519
+vector_search    search           HNSW64         wal=1 c=4       4927.9 ops/s p99=1.31ms recall@10=0.9519
+vector_search    search           HNSW64         wal=1 c=8       7376.5 ops/s p99=1.70ms recall@10=0.9519
+vector_search    search           HNSW64         wal=1 c=16      8409.0 ops/s p99=3.75ms recall@10=0.9519
+
+Wrote results/vector_HNSW64_100000_10000.csv and results/vector_HNSW64_100000_10000.json
+
+# finished: 2026-08-11 11:43:32 UTC (elapsed 338s, exit code 0)

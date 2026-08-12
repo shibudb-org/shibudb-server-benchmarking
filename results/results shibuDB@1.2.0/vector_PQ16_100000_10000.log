@@ -1,0 +1,132 @@
+$ /home/<user>/shibudb-server-benchmarking/.venv/bin/python /home/<user>/shibudb-server-benchmarking/benchmark.py --suites vector --concurrency 1 2 4 8 16 --host localhost --port 4444 --user admin --password <redacted> --drop-existing --cleanup --out results/vector_PQ16_100000_10000.csv --both-wal --num-base 100000 --num-queries 10000 --k 10 --ingest-concurrency 16 --post-ingest-wait 60 --index-types PQ16
+# started: 2026-08-11 12:17:55 UTC
+
+{
+  "timestamp": "2026-08-11T12:17:56.094247+00:00",
+  "git_commit": "22b30f0351acb1f56cdbe77742f47c0e93a54067",
+  "shibudb_client_version": "unknown",
+  "python_version": "3.13.5",
+  "dataset": "SIFT1M",
+  "client": {
+    "host": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5
+  },
+  "server": {
+    "host": "localhost",
+    "port": 4444,
+    "version": "unknown",
+    "commit": "unknown",
+    "hostname": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5,
+    "disk": "10 GB total (/)",
+    "notes": "auto-detected (server co-located with benchmark client)"
+  },
+  "data_scale": {
+    "dataset": "SIFT1M",
+    "suites": [
+      "vector_search"
+    ],
+    "num_base": 100000,
+    "num_queries": 10000,
+    "dimension": 128,
+    "k": 10,
+    "metric": "L2",
+    "full_sift_base": false,
+    "vector_base_bytes": 51200000,
+    "vector_query_bytes": 5120000,
+    "kv_keys": 100000,
+    "kv_value_size_bytes": 100,
+    "kv_total_bytes_approx": 10800000
+  },
+  "client_host": "test2",
+  "server_host": "localhost",
+  "server_port": 4444,
+  "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+  "processor": "AMD EPYC 7B12",
+  "cpu_count": 16,
+  "args": {
+    "host": "localhost",
+    "port": 4444,
+    "user": "admin",
+    "timeout": 120,
+    "server_version": "",
+    "server_commit": "",
+    "server_info_file": "",
+    "suites": [
+      "vector"
+    ],
+    "data_dir": "/home/<user>/.shibudb-benchmarks/data",
+    "num_base": 100000,
+    "num_queries": 10000,
+    "k": 10,
+    "dimension": 128,
+    "index_types": [
+      "PQ16"
+    ],
+    "metric": "L2",
+    "both_wal": true,
+    "enable_wal": false,
+    "kv_keys": 100000,
+    "kv_value_size": 100,
+    "concurrency": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "ingest_concurrency": 16,
+    "client_parallelism": "process",
+    "settle_timeout": 600,
+    "post_ingest_wait": 60,
+    "drop_existing": true,
+    "cleanup": true,
+    "space_prefix": "bench",
+    "out": "results/vector_PQ16_100000_10000.csv"
+  }
+}
+Loaded SIFT1M: base=(1000000, 128) query=(10000, 128) groundtruth=(10000, 100)
+[gt] computing exact ground-truth (num_base=100000, metric=L2)...
+[gt] done in 7.0s
+
+=== VECTOR index=PQ16 wal=False ===
+[ingest] 23888 vec/s (4.2s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[query] c=1    QPS=   840.1 recall@10=0.6116 p99=1.93ms failed=0
+[query] c=2    QPS=  1186.5 recall@10=0.6116 p99=2.64ms failed=0
+[query] c=4    QPS=  2529.5 recall@10=0.6116 p99=2.66ms failed=0
+[query] c=8    QPS=  4154.4 recall@10=0.6116 p99=2.96ms failed=0
+[query] c=16   QPS=  5383.1 recall@10=0.6116 p99=4.66ms failed=0
+
+=== VECTOR index=PQ16 wal=True ===
+[ingest] 593 vec/s (168.7s, 0 failed)
+[settle] waiting 60s for training/flushing to settle...
+[query] c=1    QPS=   927.5 recall@10=0.6097 p99=1.74ms failed=0
+[query] c=2    QPS=  1289.6 recall@10=0.6097 p99=2.48ms failed=0
+[query] c=4    QPS=  2649.7 recall@10=0.6097 p99=2.50ms failed=0
+[query] c=8    QPS=  4363.8 recall@10=0.6097 p99=2.73ms failed=0
+[query] c=16   QPS=  5470.5 recall@10=0.6097 p99=4.55ms failed=0
+
+=== Summary ===
+vector_search    insert           PQ16           wal=0 c=16     23888.3 ops/s p99=2.48ms
+vector_search    search           PQ16           wal=0 c=1        840.1 ops/s p99=1.93ms recall@10=0.6116
+vector_search    search           PQ16           wal=0 c=2       1186.5 ops/s p99=2.64ms recall@10=0.6116
+vector_search    search           PQ16           wal=0 c=4       2529.5 ops/s p99=2.66ms recall@10=0.6116
+vector_search    search           PQ16           wal=0 c=8       4154.4 ops/s p99=2.96ms recall@10=0.6116
+vector_search    search           PQ16           wal=0 c=16      5383.1 ops/s p99=4.66ms recall@10=0.6116
+vector_search    insert           PQ16           wal=1 c=16       592.8 ops/s p99=32.63ms
+vector_search    search           PQ16           wal=1 c=1        927.5 ops/s p99=1.74ms recall@10=0.6097
+vector_search    search           PQ16           wal=1 c=2       1289.6 ops/s p99=2.48ms recall@10=0.6097
+vector_search    search           PQ16           wal=1 c=4       2649.7 ops/s p99=2.50ms recall@10=0.6097
+vector_search    search           PQ16           wal=1 c=8       4363.8 ops/s p99=2.73ms recall@10=0.6097
+vector_search    search           PQ16           wal=1 c=16      5470.5 ops/s p99=4.55ms recall@10=0.6097
+
+Wrote results/vector_PQ16_100000_10000.csv and results/vector_PQ16_100000_10000.json
+
+# finished: 2026-08-11 12:23:53 UTC (elapsed 357s, exit code 0)

@@ -1,0 +1,142 @@
+$ /home/<user>/shibudb-server-benchmarking/.venv/bin/python /home/<user>/shibudb-server-benchmarking/benchmark.py --suites kv --concurrency 1 2 4 8 16 --host localhost --port 4444 --user admin --password <redacted> --drop-existing --cleanup --out results/kv_500000_10000.csv --both-wal --kv-keys 500000 --kv-value-size 100
+# started: 2026-08-11 19:13:32 UTC
+
+{
+  "timestamp": "2026-08-11T19:13:32.249718+00:00",
+  "git_commit": "22b30f0351acb1f56cdbe77742f47c0e93a54067",
+  "shibudb_client_version": "unknown",
+  "python_version": "3.13.5",
+  "dataset": "SIFT1M",
+  "client": {
+    "host": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5
+  },
+  "server": {
+    "host": "localhost",
+    "port": 4444,
+    "version": "unknown",
+    "commit": "unknown",
+    "hostname": "test2",
+    "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+    "processor": "AMD EPYC 7B12",
+    "cpu_count": 16,
+    "ram_gb": 23.5,
+    "disk": "10 GB total (/)",
+    "notes": "auto-detected (server co-located with benchmark client)"
+  },
+  "data_scale": {
+    "dataset": "SIFT1M",
+    "suites": [
+      "key_value"
+    ],
+    "num_base": 100000,
+    "num_queries": 1000,
+    "dimension": 128,
+    "k": 10,
+    "metric": "L2",
+    "full_sift_base": false,
+    "vector_base_bytes": 51200000,
+    "vector_query_bytes": 512000,
+    "kv_keys": 500000,
+    "kv_value_size_bytes": 100,
+    "kv_total_bytes_approx": 54000000
+  },
+  "client_host": "test2",
+  "server_host": "localhost",
+  "server_port": 4444,
+  "platform": "Linux-6.12.100+deb13-cloud-amd64-x86_64-with-glibc2.41",
+  "processor": "AMD EPYC 7B12",
+  "cpu_count": 16,
+  "args": {
+    "host": "localhost",
+    "port": 4444,
+    "user": "admin",
+    "timeout": 120,
+    "server_version": "",
+    "server_commit": "",
+    "server_info_file": "",
+    "suites": [
+      "kv"
+    ],
+    "data_dir": "/home/<user>/.shibudb-benchmarks/data",
+    "num_base": 100000,
+    "num_queries": 1000,
+    "k": 10,
+    "dimension": 128,
+    "index_types": [
+      "Flat",
+      "HNSW8",
+      "HNSW16",
+      "HNSW32",
+      "HNSW64",
+      "IVF64,Flat",
+      "IVF128,Flat",
+      "IVF256,Flat",
+      "IVF256,PQ8",
+      "IVF256,PQ16",
+      "PQ8",
+      "PQ16"
+    ],
+    "metric": "L2",
+    "both_wal": true,
+    "enable_wal": false,
+    "kv_keys": 500000,
+    "kv_value_size": 100,
+    "concurrency": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "ingest_concurrency": 16,
+    "client_parallelism": "process",
+    "settle_timeout": 600,
+    "post_ingest_wait": 60,
+    "drop_existing": true,
+    "cleanup": true,
+    "space_prefix": "bench",
+    "out": "results/kv_500000_10000.csv"
+  }
+}
+
+=== KEY-VALUE wal=False ===
+[put] 65122 ops/s (7.7s, 0 failed)
+[get] c=1       12791 ops/s p99=0.15ms failed=0
+[get] c=2       20981 ops/s p99=0.26ms failed=0
+[get] c=4       23810 ops/s p99=0.30ms failed=0
+[get] c=8       39497 ops/s p99=0.44ms failed=0
+[get] c=16      63744 ops/s p99=0.58ms failed=0
+[delete] c=16      46627 ops/s p99=0.63ms failed=0
+
+=== KEY-VALUE wal=True ===
+[put] 647 ops/s (773.1s, 0 failed)
+[get] c=1       12694 ops/s p99=0.15ms failed=0
+[get] c=2       20380 ops/s p99=0.28ms failed=0
+[get] c=4       23689 ops/s p99=0.30ms failed=0
+[get] c=8       39733 ops/s p99=0.45ms failed=0
+[get] c=16      62744 ops/s p99=0.58ms failed=0
+[delete] c=16        645 ops/s p99=32.01ms failed=0
+
+=== Summary ===
+key_value        put                             wal=0 c=16     65122.0 ops/s p99=0.62ms
+key_value        get                             wal=0 c=1      12791.3 ops/s p99=0.15ms
+key_value        get                             wal=0 c=2      20981.4 ops/s p99=0.26ms
+key_value        get                             wal=0 c=4      23810.0 ops/s p99=0.30ms
+key_value        get                             wal=0 c=8      39497.0 ops/s p99=0.44ms
+key_value        get                             wal=0 c=16     63744.5 ops/s p99=0.58ms
+key_value        delete                          wal=0 c=16     46627.2 ops/s p99=0.63ms
+key_value        put                             wal=1 c=16       646.7 ops/s p99=33.87ms
+key_value        get                             wal=1 c=1      12694.4 ops/s p99=0.15ms
+key_value        get                             wal=1 c=2      20379.8 ops/s p99=0.28ms
+key_value        get                             wal=1 c=4      23688.5 ops/s p99=0.30ms
+key_value        get                             wal=1 c=8      39732.9 ops/s p99=0.45ms
+key_value        get                             wal=1 c=16     62744.1 ops/s p99=0.58ms
+key_value        delete                          wal=1 c=16       645.4 ops/s p99=32.01ms
+
+Wrote results/kv_500000_10000.csv and results/kv_500000_10000.json
+
+# finished: 2026-08-11 19:43:11 UTC (elapsed 1780s, exit code 0)
